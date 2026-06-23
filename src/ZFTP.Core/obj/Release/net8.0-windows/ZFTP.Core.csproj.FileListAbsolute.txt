@@ -1,0 +1,15 @@
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\bin\Release\net8.0-windows\ZFTP.Core.deps.json
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\bin\Release\net8.0-windows\ZFTP.Core.dll
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\bin\Release\net8.0-windows\ZFTP.Core.pdb
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\bin\Release\net8.0-windows\winfsp-msil.dll
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\bin\Release\net8.0-windows\winfsp-msil.xml
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\obj\Release\net8.0-windows\ZFTP.Core.csproj.AssemblyReference.cache
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\obj\Release\net8.0-windows\ZFTP.Core.GeneratedMSBuildEditorConfig.editorconfig
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\obj\Release\net8.0-windows\ZFTP.Core.AssemblyInfoInputs.cache
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\obj\Release\net8.0-windows\ZFTP.Core.AssemblyInfo.cs
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\obj\Release\net8.0-windows\ZFTP.Core.csproj.CoreCompileInputs.cache
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\obj\Release\net8.0-windows\ZFTP.Core.csproj.Up2Date
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\obj\Release\net8.0-windows\ZFTP.Core.dll
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\obj\Release\net8.0-windows\refint\ZFTP.Core.dll
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\obj\Release\net8.0-windows\ZFTP.Core.pdb
+E:\SFTP Net Drive\ZFTP\src\ZFTP.Core\obj\Release\net8.0-windows\ref\ZFTP.Core.dll

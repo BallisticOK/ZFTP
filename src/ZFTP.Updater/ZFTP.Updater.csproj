@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Small standalone updater. WinExe = no console window; WinForms = message boxes. -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <PlatformTarget>x64</PlatformTarget>
+    <Platforms>x64</Platforms>
+    <AssemblyName>ZFTP.Updater</AssemblyName>
+    <ApplicationIcon>..\ZFTP.App\zftp.ico</ApplicationIcon>
+    <Version>2.3.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ZFTP.Core\ZFTP.Core.csproj" />
+  </ItemGroup>
+
+</Project>

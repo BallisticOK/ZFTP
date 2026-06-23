@@ -1,0 +1,14 @@
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\ZFTP.Updater.exe
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\ZFTP.Updater.dll
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\ZFTP.Updater.deps.json
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\ZFTP.Updater.runtimeconfig.json
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\ZFTP.Updater.pdb
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\BouncyCastle.Cryptography.dll
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\Microsoft.Extensions.DependencyInjection.Abstractions.dll
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\Microsoft.Extensions.Logging.Abstractions.dll
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\Renci.SshNet.dll
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\System.Security.Cryptography.ProtectedData.dll
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\ZFTP.Core.dll
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\winfsp-msil.dll
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\ZFTP.Core.pdb
+E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish\winfsp-msil.xml
