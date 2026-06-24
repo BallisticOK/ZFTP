@@ -6,7 +6,7 @@
 
 **Mount any SFTP server as a Windows drive. Free, open, and it actually looks nice.**
 
-![version](https://img.shields.io/badge/version-2.3.0-2D7DD2)
+![version](https://img.shields.io/badge/version-2.4.0-2D7DD2)
 ![platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0078D6)
 ![built with](https://img.shields.io/badge/built%20with-.NET%208%20%2B%20WPF-512BD4)
 
