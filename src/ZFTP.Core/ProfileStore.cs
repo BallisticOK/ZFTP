@@ -65,6 +65,7 @@ public static class ProfileStore
         public string KeyPath { get; set; } = "";
         public string KeyPassphraseEnc { get; set; } = "";  // DPAPI ciphertext (base64)
         public string KnownHostKey { get; set; } = "";
+        public string DeviceSerial { get; set; } = "";
         public string RemoteRoot { get; set; } = "/";
         public string DriveLetter { get; set; } = "Z";
         public bool Enabled { get; set; } = true;
@@ -98,6 +99,7 @@ public static class ProfileStore
             KeyPath = p.KeyPath,
             KeyPassphraseEnc = Encrypt(p.KeyPassphrase),
             KnownHostKey = p.KnownHostKey,
+            DeviceSerial = p.DeviceSerial,
             RemoteRoot = p.RemoteRoot,
             DriveLetter = p.DriveLetter,
             Enabled = p.Enabled,
@@ -140,6 +142,7 @@ public static class ProfileStore
                 KeyPath = s.KeyPath,
                 KeyPassphrase = Decrypt(s.KeyPassphraseEnc),
                 KnownHostKey = s.KnownHostKey,
+                DeviceSerial = s.DeviceSerial,
                 RemoteRoot = s.RemoteRoot,
                 DriveLetter = s.DriveLetter,
                 Enabled = s.Enabled,

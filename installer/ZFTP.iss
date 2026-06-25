@@ -7,7 +7,7 @@
 ; ============================================================================
 
 #define MyAppName "ZFTP"
-#define MyAppVersion "2.3.0"
+#define MyAppVersion "2.6.1"
 #define MyAppPublisher "ZFTP"
 #define MyAppExeName "ZFTP.exe"
 #define MyUpdaterExe "ZFTP.Updater.exe"
@@ -79,6 +79,21 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}
   Flags: nowait postinstall skipifsilent
 
 [Code]
+// Before replacing files, make sure a leftover adb background server from a prior
+// install isn't still running and holding tools\adb.exe open (which would block the
+// update). This is targeted: `adb kill-server` only stops the background server, it
+// does NOT force-kill other adb.exe processes (e.g. Android Studio's).
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  AdbPath: String;
+begin
+  AdbPath := ExpandConstant('{app}\tools\adb.exe');
+  if FileExists(AdbPath) then
+    Exec(AdbPath, 'kill-server', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := '';
+end;
+
 function WinFspMissing: Boolean;
 begin
   Result := not FileExists(ExpandConstant('{commonpf32}\WinFsp\bin\winfsp-x64.dll'));

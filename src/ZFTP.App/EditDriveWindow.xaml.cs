@@ -26,7 +26,7 @@ public partial class EditDriveWindow : FluentWindow
     {
         ProviderType.Sftp, ProviderType.Ftp, ProviderType.Ftps, ProviderType.WebDav,
         ProviderType.S3, ProviderType.GoogleDrive, ProviderType.Dropbox,
-        ProviderType.OneDrive, ProviderType.Box,
+        ProviderType.OneDrive, ProviderType.Box, ProviderType.Android, ProviderType.IPhone,
     };
 
     private static readonly (string Name, string Hex)[] Colors =
@@ -114,6 +114,15 @@ public partial class EditDriveWindow : FluentWindow
             PortBox.Text = "21";
         else if (pt == ProviderType.Sftp && (PortBox.Text == "21" || string.IsNullOrWhiteSpace(PortBox.Text)))
             PortBox.Text = "22";
+
+        // Android shared storage lives under /sdcard; iPhone's AFC root is "/".
+        if (RootBox != null && pt == ProviderType.Android &&
+            (string.IsNullOrWhiteSpace(RootBox.Text) || RootBox.Text.Trim() == "/"))
+            RootBox.Text = "/sdcard";
+        else if (RootBox != null && pt == ProviderType.IPhone &&
+            (string.IsNullOrWhiteSpace(RootBox.Text) || RootBox.Text.Trim() == "/sdcard"))
+            RootBox.Text = "/";
+
         UpdateProviderVisibility();
     }
 
@@ -126,6 +135,8 @@ public partial class EditDriveWindow : FluentWindow
         bool webdav = pt == ProviderType.WebDav;
         bool s3 = pt == ProviderType.S3;
         bool oauth = RcloneService.RequiresOAuth(pt);
+        bool android = pt == ProviderType.Android;
+        bool apple = pt == ProviderType.IPhone;
 
         HostPanel.Visibility = (sftp || ftpish) ? Visibility.Visible : Visibility.Collapsed;
         UrlPanel.Visibility = webdav ? Visibility.Visible : Visibility.Collapsed;
@@ -133,7 +144,11 @@ public partial class EditDriveWindow : FluentWindow
         AuthPanel.Visibility = sftp ? Visibility.Visible : Visibility.Collapsed;
         S3Panel.Visibility = s3 ? Visibility.Visible : Visibility.Collapsed;
         OAuthPanel.Visibility = oauth ? Visibility.Visible : Visibility.Collapsed;
+        AndroidPanel.Visibility = android ? Visibility.Visible : Visibility.Collapsed;
+        ApplePanel.Visibility = apple ? Visibility.Visible : Visibility.Collapsed;
         if (oauth) UpdateOAuthStatus();
+        if (android) LoadDevices(Result.DeviceSerial);
+        if (apple) LoadAppleDevices(Result.DeviceSerial);
 
         if (sftp)
             UpdateAuthVisibility();
@@ -203,6 +218,127 @@ public partial class EditDriveWindow : FluentWindow
             OAuthStatusText.Text = $"Signed in as {account}";
     }
 
+    // ---- Android device picker --------------------------------------------
+
+    private bool _loadingDevices;
+
+    private string SelectedDeviceSerial() =>
+        (DeviceCombo?.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
+
+    private void RefreshDevices_Click(object sender, RoutedEventArgs e) => LoadDevices(SelectedDeviceSerial());
+
+    /// <summary>Fill the device combo from `adb devices` (off the UI thread), keeping
+    /// the wanted serial selected if it's present.</summary>
+    private async void LoadDevices(string? desiredSerial)
+    {
+        if (DeviceCombo == null || _loadingDevices) return;
+        _loadingDevices = true;
+        var want = (desiredSerial ?? "").Trim();
+        try
+        {
+            RefreshDevicesButton.IsEnabled = false;
+            DeviceCombo.Items.Clear();
+            DeviceCombo.Items.Add(new ComboBoxItem { Content = "Searching for devices...", Tag = "", IsEnabled = false });
+            DeviceCombo.SelectedIndex = 0;
+
+            if (!AdbService.Available)
+            {
+                DeviceCombo.Items.Clear();
+                DeviceCombo.Items.Add(new ComboBoxItem { Content = "Android engine (adb) not found - reinstall ZFTP", Tag = "", IsEnabled = false });
+                DeviceCombo.SelectedIndex = 0;
+                return;
+            }
+
+            var devices = await Task.Run(() => { AdbService.EnsureServer(); return AdbService.ListDevices(); });
+
+            DeviceCombo.Items.Clear();
+            foreach (var d in devices)
+                DeviceCombo.Items.Add(new ComboBoxItem { Content = d.Label, Tag = d.Serial });
+
+            // Keep a saved-but-currently-disconnected device selectable.
+            if (!string.IsNullOrEmpty(want) &&
+                !devices.Any(d => d.Serial.Equals(want, StringComparison.OrdinalIgnoreCase)))
+                DeviceCombo.Items.Add(new ComboBoxItem { Content = want + " (not connected)", Tag = want });
+
+            if (DeviceCombo.Items.Count == 0)
+            {
+                DeviceCombo.Items.Add(new ComboBoxItem { Content = "No device detected - plug in and allow USB debugging", Tag = "", IsEnabled = false });
+                DeviceCombo.SelectedIndex = 0;
+                return;
+            }
+
+            int sel = 0;
+            if (want.Length > 0)
+                for (int i = 0; i < DeviceCombo.Items.Count; i++)
+                    if (DeviceCombo.Items[i] is ComboBoxItem it &&
+                        (it.Tag as string ?? "").Equals(want, StringComparison.OrdinalIgnoreCase))
+                    { sel = i; break; }
+            DeviceCombo.SelectedIndex = sel;
+        }
+        catch { /* leave whatever is in the combo */ }
+        finally { _loadingDevices = false; RefreshDevicesButton.IsEnabled = true; }
+    }
+
+    // ---- Apple (iPhone/iPad) device picker --------------------------------
+
+    private bool _loadingAppleDevices;
+
+    private string SelectedAppleSerial() =>
+        (AppleDeviceCombo?.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
+
+    private void RefreshAppleDevices_Click(object sender, RoutedEventArgs e) => LoadAppleDevices(SelectedAppleSerial());
+
+    /// <summary>Fill the Apple device combo from the bundled imobiledevice library
+    /// (off the UI thread), keeping the wanted UDID selected if it's present.</summary>
+    private async void LoadAppleDevices(string? desiredUdid)
+    {
+        if (AppleDeviceCombo == null || _loadingAppleDevices) return;
+        _loadingAppleDevices = true;
+        var want = (desiredUdid ?? "").Trim();
+        try
+        {
+            RefreshAppleButton.IsEnabled = false;
+            AppleDeviceCombo.Items.Clear();
+            AppleDeviceCombo.Items.Add(new ComboBoxItem { Content = "Searching for devices...", Tag = "", IsEnabled = false });
+            AppleDeviceCombo.SelectedIndex = 0;
+
+            if (!AppleDeviceService.Available)
+            {
+                AppleDeviceCombo.Items.Clear();
+                AppleDeviceCombo.Items.Add(new ComboBoxItem { Content = "Apple device engine unavailable - install Apple Devices / iTunes", Tag = "", IsEnabled = false });
+                AppleDeviceCombo.SelectedIndex = 0;
+                return;
+            }
+
+            var devices = await Task.Run(() => AppleDeviceService.ListDevices());
+
+            AppleDeviceCombo.Items.Clear();
+            foreach (var d in devices)
+                AppleDeviceCombo.Items.Add(new ComboBoxItem { Content = d.Label, Tag = d.Udid });
+
+            if (!string.IsNullOrEmpty(want) &&
+                !devices.Any(d => d.Udid.Equals(want, StringComparison.OrdinalIgnoreCase)))
+                AppleDeviceCombo.Items.Add(new ComboBoxItem { Content = want + " (not connected)", Tag = want });
+
+            if (AppleDeviceCombo.Items.Count == 0)
+            {
+                AppleDeviceCombo.Items.Add(new ComboBoxItem { Content = "No device detected - plug in, unlock, and tap Trust", Tag = "", IsEnabled = false });
+                AppleDeviceCombo.SelectedIndex = 0;
+                return;
+            }
+
+            int sel = 0;
+            if (want.Length > 0)
+                for (int i = 0; i < AppleDeviceCombo.Items.Count; i++)
+                    if (AppleDeviceCombo.Items[i] is ComboBoxItem it &&
+                        (it.Tag as string ?? "").Equals(want, StringComparison.OrdinalIgnoreCase))
+                    { sel = i; break; }
+            AppleDeviceCombo.SelectedIndex = sel;
+        }
+        catch { /* leave whatever is in the combo */ }
+        finally { _loadingAppleDevices = false; RefreshAppleButton.IsEnabled = true; }
+    }
+
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         var pt = SelectedProvider();
@@ -238,6 +374,8 @@ public partial class EditDriveWindow : FluentWindow
         p.S3Endpoint = S3EndpointBox.Text.Trim();
         p.ClientId = ClientIdBox.Text.Trim();
         p.ClientSecret = ClientSecretBox.Password;
+        if (p.Provider == ProviderType.Android) p.DeviceSerial = SelectedDeviceSerial();
+        else if (p.Provider == ProviderType.IPhone) p.DeviceSerial = SelectedAppleSerial();
         p.RemoteRoot = string.IsNullOrWhiteSpace(RootBox.Text) ? "/" : RootBox.Text.Trim();
         p.DriveLetter = (DriveCombo.SelectedItem as string ?? "Z:").TrimEnd(':');
         p.Access = AccessCombo.SelectedIndex == 1 ? AccessMode.ReadOnly : AccessMode.ReadWrite;

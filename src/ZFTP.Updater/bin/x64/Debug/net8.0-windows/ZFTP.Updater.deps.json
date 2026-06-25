@@ -6,7 +6,7 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v8.0": {
-      "ZFTP.Updater/2.0.1": {
+      "ZFTP.Updater/2.3.0": {
         "dependencies": {
           "ZFTP.Core": "1.0.0"
         },
@@ -84,7 +84,7 @@
     }
   },
   "libraries": {
-    "ZFTP.Updater/2.0.1": {
+    "ZFTP.Updater/2.3.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

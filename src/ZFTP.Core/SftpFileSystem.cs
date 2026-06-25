@@ -38,6 +38,66 @@ public sealed class SftpFileSystem : FileSystemBase
     private readonly object _gate = new();    // SSH.NET uses one channel; serialize access to be safe
     private readonly byte[] _defaultSecurity; // one "everyone full access" descriptor reused for every file
 
+    // ---- attribute cache --------------------------------------------------
+    // Listing a folder already pulls every entry's attributes. Without a cache,
+    // Windows then turns around and asks us for each file's attributes again
+    // (GetSecurityByName → Open → GetFileInfo), and each of those is a separate
+    // round-trip to the server. Over a slow link that's what makes browsing
+    // crawl. We stash the attributes from the listing for a few seconds so those
+    // follow-up calls are answered locally instead of over the wire. The cache
+    // is invalidated whenever WE change a file, so our own edits are never stale.
+    private const long AttrCacheTtlMs = 15_000;
+    private readonly Dictionary<string, (SftpFileAttributes attr, long expires)> _attrCache = new();
+
+    // Real volume size, filled in by MountSession from a `df` probe. Defaults to
+    // a large fixed size until (and unless) we learn the truth from the server.
+    private long _totalBytes = 1L << 42;     // 4 TB placeholder
+    private long _freeBytes = 1L << 41;      // 2 TB placeholder
+
+    /// <summary>Update the advertised drive size (called with real numbers from `df`).</summary>
+    public void UpdateVolumeSpace(long totalBytes, long freeBytes)
+    {
+        if (totalBytes <= 0) return;
+        if (freeBytes < 0) freeBytes = 0;
+        if (freeBytes > totalBytes) freeBytes = totalBytes;
+        Interlocked.Exchange(ref _totalBytes, totalBytes);
+        Interlocked.Exchange(ref _freeBytes, freeBytes);
+    }
+
+    // These run only under _gate (the callers already hold it).
+    private SftpFileAttributes? TryGetCachedAttr(string path)
+    {
+        if (_attrCache.TryGetValue(path, out var e))
+        {
+            if (e.expires > Environment.TickCount64) return e.attr;
+            _attrCache.Remove(path);
+        }
+        return null;
+    }
+
+    private void CacheAttr(string path, SftpFileAttributes a) =>
+        _attrCache[path] = (a, Environment.TickCount64 + AttrCacheTtlMs);
+
+    private void InvalidateAttr(string path) => _attrCache.Remove(path);
+
+    /// <summary>Fetch attributes, using the short-lived cache when we can.</summary>
+    private SftpFileAttributes GetAttrsCached(string path)
+    {
+        var cached = TryGetCachedAttr(path);
+        if (cached != null) return cached;
+        var a = _client.GetAttributes(path);
+        CacheAttr(path, a);
+        return a;
+    }
+
+    /// <summary>Re-read attributes fresh (after we changed the file) and refresh the cache.</summary>
+    private FileInfo BuildFreshAndCache(string path)
+    {
+        var a = _client.GetAttributes(path);
+        CacheAttr(path, a);
+        return BuildInfo(a);
+    }
+
     // Running totals so the app can show live transfer speed. Updated with
     // Interlocked because WinFsp may call Read/Write from several threads.
     private long _bytesRead;
@@ -145,10 +205,10 @@ public sealed class SftpFileSystem : FileSystemBase
     public override int GetVolumeInfo(out VolumeInfo volumeInfo)
     {
         volumeInfo = default;
-        // We don't (yet) query real free space from the server, so advertise a
-        // large fixed size. Windows just needs *something* sensible here.
-        volumeInfo.TotalSize = 1UL << 42;            // 4 TB
-        volumeInfo.FreeSize = 1UL << 41;             // 2 TB
+        // Real size from the server's `df` (filled in by MountSession). Falls back
+        // to a large placeholder if the server didn't let us run df.
+        volumeInfo.TotalSize = (ulong)Interlocked.Read(ref _totalBytes);
+        volumeInfo.FreeSize = (ulong)Interlocked.Read(ref _freeBytes);
         volumeInfo.SetVolumeLabel(_volumeLabel);     // shows as the drive name in Explorer
         return STATUS_SUCCESS;
     }
@@ -164,7 +224,7 @@ public sealed class SftpFileSystem : FileSystemBase
         {
             try
             {
-                var a = _client.GetAttributes(path);
+                var a = GetAttrsCached(path);
                 fileAttributes = a.IsDirectory
                     ? (uint)System.IO.FileAttributes.Directory
                     : (uint)System.IO.FileAttributes.Normal;
@@ -193,7 +253,7 @@ public sealed class SftpFileSystem : FileSystemBase
         {
             try
             {
-                var a = _client.GetAttributes(path);
+                var a = GetAttrsCached(path);
                 var desc = new FileDesc { Path = path, IsDirectory = a.IsDirectory };
                 fileDesc = desc;
                 fileInfo = BuildInfo(a);
@@ -239,6 +299,7 @@ public sealed class SftpFileSystem : FileSystemBase
                 }
 
                 var a = _client.GetAttributes(path);
+                CacheAttr(path, a);
                 var desc = new FileDesc { Path = path, IsDirectory = makeDir };
                 fileDesc = desc;
                 fileInfo = BuildInfo(a);
@@ -264,7 +325,7 @@ public sealed class SftpFileSystem : FileSystemBase
             {
                 CloseStream(d);
                 using (var s = _client.Create(d.Path)) { } // truncate to zero bytes
-                fileInfo = BuildInfo(_client.GetAttributes(d.Path));
+                fileInfo = BuildFreshAndCache(d.Path);
                 return STATUS_SUCCESS;
             }
             catch { return STATUS_ACCESS_DENIED; }
@@ -352,7 +413,7 @@ public sealed class SftpFileSystem : FileSystemBase
                 if (constrainedIo)
                 {
                     // Must not grow the file. Clamp to what's already there.
-                    if (writeAt >= s.Length) { fileInfo = BuildInfo(_client.GetAttributes(d.Path)); return STATUS_SUCCESS; }
+                    if (writeAt >= s.Length) { fileInfo = BuildFreshAndCache(d.Path); return STATUS_SUCCESS; }
                     if (writeAt + length > s.Length) length = (uint)(s.Length - writeAt);
                 }
 
@@ -364,7 +425,7 @@ public sealed class SftpFileSystem : FileSystemBase
 
                 bytesTransferred = length;
                 Interlocked.Add(ref _bytesWritten, length);
-                fileInfo = BuildInfo(_client.GetAttributes(d.Path));
+                fileInfo = BuildFreshAndCache(d.Path);
                 return STATUS_SUCCESS;
             }
             catch { return STATUS_UNEXPECTED_IO_ERROR; }
@@ -380,7 +441,7 @@ public sealed class SftpFileSystem : FileSystemBase
             try
             {
                 if (d?.Stream != null) d.Stream.Flush();
-                if (d != null) fileInfo = BuildInfo(_client.GetAttributes(d.Path));
+                if (d != null) fileInfo = BuildFreshAndCache(d.Path);
                 return STATUS_SUCCESS;
             }
             catch { return STATUS_SUCCESS; }
@@ -395,7 +456,7 @@ public sealed class SftpFileSystem : FileSystemBase
         var d = (FileDesc)fileDesc;
         lock (_gate)
         {
-            try { fileInfo = BuildInfo(_client.GetAttributes(d.Path)); return STATUS_SUCCESS; }
+            try { fileInfo = BuildInfo(GetAttrsCached(d.Path)); return STATUS_SUCCESS; }
             catch { return STATUS_OBJECT_NAME_NOT_FOUND; }
         }
     }
@@ -415,7 +476,7 @@ public sealed class SftpFileSystem : FileSystemBase
                 if (lastWriteTime != 0) a.LastWriteTime = DateTime.FromFileTimeUtc((long)lastWriteTime);
                 if (lastAccessTime != 0) a.LastAccessTime = DateTime.FromFileTimeUtc((long)lastAccessTime);
                 _client.SetAttributes(d.Path, a);
-                fileInfo = BuildInfo(_client.GetAttributes(d.Path));
+                fileInfo = BuildFreshAndCache(d.Path);
                 return STATUS_SUCCESS;
             }
             catch { return STATUS_SUCCESS; } // best-effort; don't fail the operation
@@ -435,7 +496,7 @@ public sealed class SftpFileSystem : FileSystemBase
                 EnsureStream(d, needWrite: true);
                 d.Stream!.SetLength((long)newSize);
                 d.Stream.Flush();
-                fileInfo = BuildInfo(_client.GetAttributes(d.Path));
+                fileInfo = BuildFreshAndCache(d.Path);
                 return STATUS_SUCCESS;
             }
             catch { return STATUS_ACCESS_DENIED; }
@@ -482,6 +543,8 @@ public sealed class SftpFileSystem : FileSystemBase
                 catch { /* target doesn't exist — fine */ }
 
                 _client.RenameFile(from, to);
+                InvalidateAttr(from);
+                InvalidateAttr(to);
                 return STATUS_SUCCESS;
             }
             catch { return STATUS_ACCESS_DENIED; }
@@ -504,6 +567,7 @@ public sealed class SftpFileSystem : FileSystemBase
                     CloseStream(d);
                     if (d.IsDirectory) _client.DeleteDirectory(d.Path);
                     else _client.DeleteFile(d.Path);
+                    InvalidateAttr(d.Path);
                 }
                 catch { }
             }
@@ -535,13 +599,17 @@ public sealed class SftpFileSystem : FileSystemBase
                 bool isRoot = d.Path == _remoteRoot;
                 if (!isRoot)
                 {
-                    try { entries.Add(new(".", BuildInfo(_client.GetAttributes(d.Path)))); } catch { }
+                    try { entries.Add(new(".", BuildFreshAndCache(d.Path))); } catch { }
                     try { entries.Add(new("..", BuildInfo(_client.GetAttributes(ParentOf(d.Path))))); } catch { }
                 }
                 foreach (var e in _client.ListDirectory(d.Path))
                 {
                     if (e.Name is "." or "..") continue;
                     entries.Add(new(e.Name, BuildInfo(e)));
+                    // Warm the cache so the per-file stat calls Explorer makes
+                    // right after this listing don't each hit the network.
+                    var childPath = d.Path == "/" ? "/" + e.Name : d.Path + "/" + e.Name;
+                    CacheAttr(childPath, e.Attributes);
                 }
             }
 

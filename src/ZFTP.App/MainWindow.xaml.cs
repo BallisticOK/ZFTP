@@ -171,6 +171,7 @@ public partial class MainWindow : FluentWindow
         _servers.Remove(item);
         SaveProfiles();
         RefreshGlobalStatus();
+        MaybeStopAdb();
     }
 
     // ---- Connect / Disconnect / Open ---------------------------------------
@@ -186,6 +187,19 @@ public partial class MainWindow : FluentWindow
         Selected?.Session.Unmount();
         DrivesList.Items.Refresh();
         RefreshGlobalStatus();
+        MaybeStopAdb();
+    }
+
+    /// <summary>
+    /// If no Android drive is mounted anymore, stop the adb background server so
+    /// it isn't left running (and holding tools\adb.exe open) when it's not in use.
+    /// Runs off the UI thread so kill-server can't stall the window.
+    /// </summary>
+    private void MaybeStopAdb()
+    {
+        bool anyAndroidMounted = _servers.Any(s => s.Profile.Provider == ProviderType.Android && s.IsMounted);
+        if (!anyAndroidMounted)
+            Task.Run(() => { try { AdbService.KillServer(); } catch { /* ignore */ } });
     }
 
     private void Open_Click(object sender, RoutedEventArgs e)
@@ -208,6 +222,7 @@ public partial class MainWindow : FluentWindow
             item.Session.Unmount();
         DrivesList.Items.Refresh();
         RefreshGlobalStatus();
+        MaybeStopAdb();
     }
 
     private async Task AutoMountAsync()
@@ -508,6 +523,9 @@ public partial class MainWindow : FluentWindow
         _reallyExit = true;
         foreach (var item in _servers.Where(s => s.IsMounted).ToList())
             item.Session.Unmount();
+        // Stop the adb background server so it stops holding tools\adb.exe open
+        // (otherwise an update can't replace it). No-op if adb was never used.
+        try { AdbService.KillServer(); } catch { /* ignore */ }
         SaveProfiles();
         // Drop our custom drive icons + Network-location entries (nothing mounted after exit).
         foreach (var s in _servers) DriveIconManager.ClearIcon(s.Profile.DriveLetter);

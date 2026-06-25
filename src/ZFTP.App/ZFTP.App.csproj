@@ -14,9 +14,9 @@
     <Platforms>x64</Platforms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>zftp.ico</ApplicationIcon>
-    <Version>2.3.0</Version>
-    <FileVersion>2.3.0.0</FileVersion>
-    <AssemblyVersion>2.3.0.0</AssemblyVersion>
+    <Version>2.6.1</Version>
+    <FileVersion>2.6.1.0</FileVersion>
+    <AssemblyVersion>2.6.1.0</AssemblyVersion>
     <Company>ZFTP</Company>
     <Product>ZFTP</Product>
   </PropertyGroup>
@@ -35,10 +35,24 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Bundled rclone engine (powers all the non-SFTP providers). -->
+    <!-- Bundled rclone engine (powers FTP/FTPS/WebDAV/S3/cloud providers). -->
     <None Include="tools\rclone.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>tools\rclone.exe</Link>
+    </None>
+    <!-- Bundled adb engine (powers the Android-over-USB provider). adb.exe needs
+         its two USB helper DLLs sitting next to it to talk to devices. -->
+    <None Include="tools\adb.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>tools\adb.exe</Link>
+    </None>
+    <None Include="tools\AdbWinApi.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>tools\AdbWinApi.dll</Link>
+    </None>
+    <None Include="tools\AdbWinUsbApi.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>tools\AdbWinUsbApi.dll</Link>
     </None>
   </ItemGroup>
 

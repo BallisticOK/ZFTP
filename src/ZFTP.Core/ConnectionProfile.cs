@@ -33,6 +33,8 @@ public enum ProviderType
     Dropbox,       // rclone (browser sign-in)
     OneDrive,      // rclone (browser sign-in)
     Box,           // rclone (browser sign-in)
+    Android,       // native engine (adb over USB)
+    IPhone,        // native engine (Apple AFC over USB) - LIMITED: photos + file-sharing apps only
 }
 
 public sealed class ConnectionProfile
@@ -86,6 +88,10 @@ public sealed class ConnectionProfile
     public string S3Endpoint { get; set; } = "";   // blank = Amazon AWS; set for Wasabi/B2/DO/etc.
     public string S3Bucket { get; set; } = "";
 
+    /// <summary>ADB serial of the chosen Android device (Provider == Android). Blank
+    /// means "use the only connected device" and is resolved at mount time.</summary>
+    public string DeviceSerial { get; set; } = "";
+
     /// <summary>Drive letter to mount on, e.g. "Z".</summary>
     public string DriveLetter { get; set; } = "Z";
 
@@ -106,6 +112,7 @@ public sealed class ConnectionProfile
         Name = o.Name; Host = o.Host; Port = o.Port; Username = o.Username;
         Auth = o.Auth; Password = o.Password; KeyPath = o.KeyPath; KeyPassphrase = o.KeyPassphrase;
         KnownHostKey = o.KnownHostKey;
+        DeviceSerial = o.DeviceSerial;
         RemoteRoot = o.RemoteRoot; DriveLetter = o.DriveLetter; Enabled = o.Enabled; AutoMount = o.AutoMount;
         Access = o.Access; Provider = o.Provider; Color = o.Color;
         Url = o.Url; S3AccessKey = o.S3AccessKey; S3Secret = o.S3Secret;

@@ -25,7 +25,9 @@ public sealed class ServerItem : INotifyPropertyChanged
 
     // ---- columns bound by the DataGrid ------------------------------------
     public string Name => Profile.Name;
-    public string Host => string.IsNullOrEmpty(Profile.Host) ? Profile.Url : Profile.Host;
+    public string Host => Profile.Provider is ProviderType.Android or ProviderType.IPhone
+        ? (string.IsNullOrEmpty(Profile.DeviceSerial) ? "USB device" : Profile.DeviceSerial)
+        : (string.IsNullOrEmpty(Profile.Host) ? Profile.Url : Profile.Host);
     public string RemoteRoot => string.IsNullOrEmpty(Profile.RemoteRoot) ? "/" : Profile.RemoteRoot;
     public string DriveLabel => Profile.DriveLetter.TrimEnd(':') + ":";
 
@@ -41,6 +43,8 @@ public sealed class ServerItem : INotifyPropertyChanged
         ProviderType.Dropbox => "Dropbox",
         ProviderType.OneDrive => "OneDrive",
         ProviderType.Box => "Box",
+        ProviderType.Android => "Android (USB)",
+        ProviderType.IPhone => "iPhone/iPad (USB)",
         _ => "",
     };
 

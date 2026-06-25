@@ -1,0 +1,67 @@
+<svg width="900" height="260" viewBox="0 0 900 260" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, system-ui, -apple-system, Roboto, sans-serif">
+  <defs>
+    <linearGradient id="bgd" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e1726"/>
+      <stop offset="1" stop-color="#0a0f18"/>
+    </linearGradient>
+    <linearGradient id="drive" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2D7DD2"/>
+      <stop offset="1" stop-color="#1b4f87"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#3f5d86"/>
+    </marker>
+  </defs>
+
+  <rect x="1" y="1" width="898" height="258" rx="18" fill="url(#bgd)" stroke="#243044" stroke-width="1.5"/>
+  <text x="450" y="44" text-anchor="middle" fill="#eef4fb" font-size="22" font-weight="700">Your phone, as a drive letter</text>
+  <rect x="394" y="58" width="112" height="3" rx="2" fill="#22C55E"/>
+
+  <!-- Node A: phones -->
+  <g transform="translate(48,92)">
+    <rect width="220" height="108" rx="14" fill="#0c1320" stroke="#2f5a3f"/>
+    <!-- android glyph -->
+    <g transform="translate(38,30)">
+      <rect x="0" y="14" width="44" height="34" rx="6" fill="#22C55E"/>
+      <rect x="6" y="6" width="32" height="10" rx="5" fill="#22C55E"/>
+      <circle cx="14" cy="11" r="2.2" fill="#0c1320"/><circle cx="30" cy="11" r="2.2" fill="#0c1320"/>
+    </g>
+    <!-- apple glyph -->
+    <g transform="translate(118,26)">
+      <rect x="0" y="6" width="40" height="60" rx="9" fill="#cfd8e3"/>
+      <rect x="5" y="12" width="30" height="42" rx="3" fill="#0c1320"/>
+      <circle cx="20" cy="60" r="3" fill="#0c1320"/>
+    </g>
+    <text x="110" y="100" text-anchor="middle" fill="#9fb0c2" font-size="12">Android &amp; iPhone / iPad</text>
+  </g>
+
+  <!-- arrow A->B -->
+  <line x1="276" y1="146" x2="338" y2="146" stroke="#3f5d86" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="307" y="136" text-anchor="middle" fill="#7f93ab" font-size="12" font-weight="600">USB</text>
+
+  <!-- Node B: ZFTP -->
+  <g transform="translate(348,92)">
+    <rect width="204" height="108" rx="14" fill="#0c1320" stroke="#2D7DD2"/>
+    <text x="102" y="44" text-anchor="middle" fill="#eef4fb" font-size="20" font-weight="800">ZFTP</text>
+    <text x="102" y="68" text-anchor="middle" fill="#9fc6f0" font-size="12">adb / AFC  +  WinFsp</text>
+    <text x="102" y="88" text-anchor="middle" fill="#6f8093" font-size="11">the translator</text>
+  </g>
+
+  <!-- arrow B->C -->
+  <line x1="560" y1="146" x2="622" y2="146" stroke="#3f5d86" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- Node C: drive -->
+  <g transform="translate(632,92)">
+    <rect width="220" height="108" rx="14" fill="#0c1320" stroke="#22304a"/>
+    <rect x="26" y="24" width="168" height="60" rx="10" fill="url(#drive)"/>
+    <text x="110" y="64" text-anchor="middle" fill="#ffffff" font-size="30" font-weight="800">Z:</text>
+    <text x="110" y="100" text-anchor="middle" fill="#9fb0c2" font-size="12">shows up in This PC</text>
+  </g>
+
+  <!-- footer tags -->
+  <g transform="translate(0,222)" font-size="12" font-weight="600">
+    <g transform="translate(196,0)"><rect width="150" height="26" rx="13" fill="#0f1f17" stroke="#2f5a3f"/><text x="75" y="17" text-anchor="middle" fill="#7df0b4">no app installed</text></g>
+    <g transform="translate(360,0)"><rect width="118" height="26" rx="13" fill="#0f1f17" stroke="#2f5a3f"/><text x="59" y="17" text-anchor="middle" fill="#7df0b4">no root needed</text></g>
+    <g transform="translate(492,0)"><rect width="212" height="26" rx="13" fill="#1f1a0d" stroke="#5a4a1f"/><text x="106" y="17" text-anchor="middle" fill="#f0cf7a">iPhone: photos + apps (limited)</text></g>
+  </g>
+</svg>

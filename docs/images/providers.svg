@@ -1,0 +1,67 @@
+<svg width="900" height="340" viewBox="0 0 900 340" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, system-ui, -apple-system, Roboto, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e1726"/>
+      <stop offset="1" stop-color="#0a0f18"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2D7DD2"/>
+      <stop offset="1" stop-color="#6aa8e8"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="1" y="1" width="898" height="338" rx="18" fill="url(#bg)" stroke="#243044" stroke-width="1.5"/>
+
+  <text x="450" y="48" text-anchor="middle" fill="#eef4fb" font-size="24" font-weight="700">Eleven storage types. One drive letter each.</text>
+  <rect x="372" y="62" width="156" height="3" rx="2" fill="url(#accent)"/>
+
+  <!-- ============ Column 1: Servers ============ -->
+  <g transform="translate(25,92)">
+    <rect width="270" height="226" rx="14" fill="#0c1320" stroke="#22304a"/>
+    <text x="135" y="34" text-anchor="middle" fill="#9fd0ff" font-size="13" font-weight="700" letter-spacing="2">SERVERS</text>
+    <rect x="105" y="44" width="60" height="2.5" rx="1" fill="#2D7DD2"/>
+    <g font-size="14" fill="#dbe6f3">
+      <g transform="translate(16,58)"><rect width="238" height="30" rx="8" fill="#111c2c" stroke="#243349"/><circle cx="18" cy="15" r="5" fill="#22C55E"/><text x="34" y="20" font-weight="600">SFTP</text><text x="120" y="20" fill="#6f8093" font-size="11">native engine</text></g>
+      <g transform="translate(16,96)"><rect width="238" height="30" rx="8" fill="#111c2c" stroke="#243349"/><circle cx="18" cy="15" r="5" fill="#2D7DD2"/><text x="34" y="20" font-weight="600">FTP</text></g>
+      <g transform="translate(16,134)"><rect width="238" height="30" rx="8" fill="#111c2c" stroke="#243349"/><circle cx="18" cy="15" r="5" fill="#2D7DD2"/><text x="34" y="20" font-weight="600">FTPS</text><text x="120" y="20" fill="#6f8093" font-size="11">FTP over TLS</text></g>
+      <g transform="translate(16,172)"><rect width="238" height="30" rx="8" fill="#111c2c" stroke="#243349"/><circle cx="18" cy="15" r="5" fill="#2D7DD2"/><text x="34" y="20" font-weight="600">WebDAV</text></g>
+    </g>
+  </g>
+
+  <!-- ============ Column 2: Cloud ============ -->
+  <g transform="translate(315,92)">
+    <rect width="270" height="226" rx="14" fill="#0c1320" stroke="#22304a"/>
+    <text x="135" y="34" text-anchor="middle" fill="#c5b3ff" font-size="13" font-weight="700" letter-spacing="2">CLOUD</text>
+    <rect x="105" y="44" width="60" height="2.5" rx="1" fill="#8B5CF6"/>
+    <g font-size="13.5" fill="#dbe6f3">
+      <g transform="translate(16,52)"><rect width="238" height="27" rx="8" fill="#111c2c" stroke="#243349"/><circle cx="18" cy="13.5" r="5" fill="#8B5CF6"/><text x="34" y="18" font-weight="600">Amazon S3</text><text x="120" y="18" fill="#6f8093" font-size="10.5">+ Wasabi, B2, MinIO</text></g>
+      <g transform="translate(16,85)"><rect width="238" height="27" rx="8" fill="#111c2c" stroke="#243349"/><circle cx="18" cy="13.5" r="5" fill="#8B5CF6"/><text x="34" y="18" font-weight="600">Google Drive</text><text x="150" y="18" fill="#6f8093" font-size="10.5">OAuth</text></g>
+      <g transform="translate(16,118)"><rect width="238" height="27" rx="8" fill="#111c2c" stroke="#243349"/><circle cx="18" cy="13.5" r="5" fill="#8B5CF6"/><text x="34" y="18" font-weight="600">Dropbox</text></g>
+      <g transform="translate(16,151)"><rect width="238" height="27" rx="8" fill="#111c2c" stroke="#243349"/><circle cx="18" cy="13.5" r="5" fill="#8B5CF6"/><text x="34" y="18" font-weight="600">OneDrive</text></g>
+      <g transform="translate(16,184)"><rect width="238" height="27" rx="8" fill="#111c2c" stroke="#243349"/><circle cx="18" cy="13.5" r="5" fill="#8B5CF6"/><text x="34" y="18" font-weight="600">Box</text></g>
+    </g>
+  </g>
+
+  <!-- ============ Column 3: Devices (NEW) ============ -->
+  <g transform="translate(605,92)">
+    <rect width="270" height="226" rx="14" fill="#0c1320" stroke="#2f5a3f"/>
+    <rect x="186" y="-9" width="68" height="22" rx="11" fill="#16331f" stroke="#22C55E"/>
+    <text x="220" y="6" text-anchor="middle" fill="#5ef0a0" font-size="11" font-weight="700">NEW</text>
+    <text x="135" y="34" text-anchor="middle" fill="#7df0b4" font-size="13" font-weight="700" letter-spacing="2">DEVICES (USB)</text>
+    <rect x="100" y="44" width="70" height="2.5" rx="1" fill="#22C55E"/>
+    <g font-size="14" fill="#dbe6f3">
+      <g transform="translate(16,62)">
+        <rect width="238" height="48" rx="10" fill="#0f1f17" stroke="#2f5a3f"/>
+        <circle cx="22" cy="24" r="6" fill="#22C55E"/>
+        <text x="40" y="21" font-weight="700">Android</text>
+        <text x="40" y="38" fill="#86a394" font-size="11">full /sdcard - no app, no root</text>
+      </g>
+      <g transform="translate(16,120)">
+        <rect width="238" height="48" rx="10" fill="#1f1a0d" stroke="#5a4a1f"/>
+        <circle cx="22" cy="24" r="6" fill="#F5B300"/>
+        <text x="40" y="21" font-weight="700">iPhone / iPad</text>
+        <text x="40" y="38" fill="#b8a173" font-size="11">photos + file-sharing apps (limited)</text>
+      </g>
+    </g>
+  </g>
+</svg>

@@ -1,10 +1,11 @@
 {
   "version": 2,
-  "dgSpecHash": "b5yTyIPQCAc=",
+  "dgSpecHash": "IxPmp0GsVck=",
   "success": true,
-  "projectFilePath": "H:\\SFTP Net Drive\\ZFTP\\src\\ZFTP.Core\\ZFTP.Core.csproj",
+  "projectFilePath": "E:\\SFTP Net Drive\\ZFTP\\src\\ZFTP.Core\\ZFTP.Core.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\ashfl\\.nuget\\packages\\bouncycastle.cryptography\\2.6.2\\bouncycastle.cryptography.2.6.2.nupkg.sha512",
+    "C:\\Users\\ashfl\\.nuget\\packages\\imobiledevice-net\\1.3.17\\imobiledevice-net.1.3.17.nupkg.sha512",
     "C:\\Users\\ashfl\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\8.0.2\\microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg.sha512",
     "C:\\Users\\ashfl\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\8.0.3\\microsoft.extensions.logging.abstractions.8.0.3.nupkg.sha512",
     "C:\\Users\\ashfl\\.nuget\\packages\\ssh.net\\2025.1.0\\ssh.net.2025.1.0.nupkg.sha512",

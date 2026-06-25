@@ -30,6 +30,8 @@
                     <ComboBoxItem Content="Dropbox" />
                     <ComboBoxItem Content="OneDrive" />
                     <ComboBoxItem Content="Box" />
+                    <ComboBoxItem Content="Android device (USB)" />
+                    <ComboBoxItem Content="iPhone / iPad (USB) - limited" />
                 </ComboBox>
 
                 <TextBlock Text="Display name" Margin="0,0,0,4" />
@@ -143,6 +145,56 @@
                             <ui:PasswordBox x:Name="ClientSecretBox" />
                         </StackPanel>
                     </Expander>
+                </StackPanel>
+
+                <!-- Android device (USB / adb) -->
+                <StackPanel x:Name="AndroidPanel" Visibility="Collapsed">
+                    <ui:Card Padding="14" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="Connect your phone or tablet over USB, then enable USB debugging:"
+                                       FontWeight="SemiBold" Margin="0,0,0,6" TextWrapping="Wrap" />
+                            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4"
+                                       Text="Settings - About phone - tap Build number 7 times to unlock Developer options, then Settings - System - Developer options - turn on USB debugging. Plug in the cable and tap Allow on the phone." />
+                            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                                       Text="No app is installed on the phone and root is not required. The drive shows your shared storage (default /sdcard)." />
+                        </StackPanel>
+                    </ui:Card>
+
+                    <TextBlock Text="Device" Margin="0,0,0,4" />
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox x:Name="DeviceCombo" Grid.Column="0" />
+                        <ui:Button Grid.Column="1" x:Name="RefreshDevicesButton" Content="Refresh"
+                                   Margin="8,0,0,0" Click="RefreshDevices_Click" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- iPhone / iPad (Apple AFC over USB) -->
+                <StackPanel x:Name="ApplePanel" Visibility="Collapsed">
+                    <ui:InfoBar x:Name="AppleLimitBar" Severity="Warning" IsOpen="True" IsClosable="False"
+                                Title="Limited: photos and File-Sharing apps only" Margin="0,0,0,10"
+                                Message="Apple locks iOS down, so this shows your Photos/DCIM and the file folders of apps that allow File Sharing - NOT the whole phone. Full storage isn't possible without a jailbreak." />
+                    <ui:Card Padding="14" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="Before connecting:" FontWeight="SemiBold" Margin="0,0,0,6" TextWrapping="Wrap" />
+                            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                                       Text="Install Apple Devices (or iTunes) once so Windows has the iPhone USB driver. Plug in the device, unlock it, and tap Trust This Computer when asked." />
+                        </StackPanel>
+                    </ui:Card>
+
+                    <TextBlock Text="Device" Margin="0,0,0,4" />
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox x:Name="AppleDeviceCombo" Grid.Column="0" />
+                        <ui:Button Grid.Column="1" x:Name="RefreshAppleButton" Content="Refresh"
+                                   Margin="8,0,0,0" Click="RefreshAppleDevices_Click" />
+                    </Grid>
                 </StackPanel>
 
                 <!-- Remote folder + drive -->

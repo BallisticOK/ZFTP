@@ -172,9 +172,21 @@ public static class RcloneService
 
     // ---- mount / unmount ---------------------------------------------------
 
+    /// <summary>
+    /// Backends that can push change notifications to rclone (ChangeNotify). For
+    /// these we can cache directory listings for a very long time and still stay
+    /// fresh, because rclone learns about remote changes via polling. The others
+    /// (FTP/FTPS/WebDAV/S3) can't, so we use a shorter dir cache for them.
+    /// </summary>
+    private static bool SupportsPolling(ProviderType t) =>
+        t is ProviderType.GoogleDrive or ProviderType.Dropbox
+          or ProviderType.OneDrive or ProviderType.Box;
+
     /// <summary>Mount the profile's remote to its drive letter. Returns the rclone process.</summary>
     public static Process Mount(ConnectionProfile p, string mountPoint)
     {
+        bool poll = SupportsPolling(p.Provider);
+
         var args = new List<string>
         {
             "mount", RemotePath(p), mountPoint,
@@ -182,11 +194,69 @@ public static class RcloneService
             "--volname", SafeVolName(p.Name),
             // No --network-mode → mounts as a regular LOCAL drive under
             // "Devices and drives" in This PC (no Network-location ghosts).
-            "--vfs-cache-mode", "writes",     // proper write support
-            "--dir-cache-time", "10s",
-            "--poll-interval", "10s",         // pick up remote changes promptly
+
+            // ---- caching: this is what makes browsing feel instant ----
+            // 'full' caches reads on disk too (not just writes), so re-opening a
+            // file or seeking around it doesn't re-download. Bounded below.
+            "--vfs-cache-mode", "full",
+            "--vfs-cache-max-age", "12h",
+            "--vfs-cache-max-size", "10G",
+            "--vfs-cache-poll-interval", "1m",
+            "--vfs-fast-fingerprint",         // cheaper cache validation
+
+            // Read in chunks and read ahead so OPENING a big file starts streaming
+            // straight away instead of stalling while the whole thing downloads.
+            // This is the difference between "click file → opens" and "click file
+            // → Explorer freezes for ages".
+            "--vfs-read-chunk-size", "32M",
+            "--vfs-read-chunk-size-limit", "1G",
+            "--vfs-read-ahead", "128M",
+            "--buffer-size", "32M",           // per-open in-memory read buffer
+
+            // How long a folder listing is trusted before rclone re-fetches it.
+            // For polling backends we trust it for a long time (changes arrive via
+            // --poll-interval); for the rest we use a modest window.
+            "--dir-cache-time", poll ? "1000h" : "30s",
+
+            // How long WinFsp itself caches file attributes, so Explorer stat-ing
+            // a folder full of files doesn't hammer the backend. (Default is 1s.)
+            "--attr-timeout", "8s",
+
+            // More parallelism for copies, metadata checks, and the warm-up below.
+            "--transfers", "8",
+            "--checkers", "32",
+
             "--no-console",
         };
+
+        if (poll)
+        {
+            args.AddRange(new[] { "--poll-interval", "15s" });   // pick up remote changes
+
+            // THE big responsiveness fix for cloud drives. Without this, the FIRST
+            // time you open any folder, Explorer's UI thread blocks while rclone
+            // makes a slow API call to list it — that's the "(Not Responding) …
+            // then it suddenly fills in" you see. --vfs-refresh walks the whole
+            // tree in the BACKGROUND right after mounting and parks it in the dir
+            // cache (kept fresh by polling above), so by the time you click around,
+            // listings are served instantly from memory instead of over the wire.
+            args.Add("--vfs-refresh");
+        }
+        else
+        {
+            args.AddRange(new[] { "--poll-interval", "0" });     // backend can't poll; don't waste calls
+        }
+
+        // Google Drive throttles aggressively by default; loosen the pacer and use
+        // bigger chunks so listing and transferring large folders isn't crawling.
+        if (p.Provider == ProviderType.GoogleDrive)
+            args.AddRange(new[]
+            {
+                "--drive-pacer-min-sleep", "10ms",
+                "--drive-pacer-burst", "200",
+                "--drive-chunk-size", "64M",
+            });
+
         if (p.Access == AccessMode.ReadOnly) args.Add("--read-only");
         return Start(args, hidden: true);
     }
