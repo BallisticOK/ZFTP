@@ -8,40 +8,11 @@
 
 # ZFTP
 
-### Mount anything as a Windows drive. SFTP, cloud, your phone. Free, open, and gorgeous.
+**Mount any SFTP server as a Windows drive. Free, open, and it actually looks nice.**
 
-<br/>
-
-[![version](https://img.shields.io/badge/version-2.6.1-2D7DD2?style=for-the-badge)](https://github.com/BallisticOK/ZFTP/releases)
-[![platform](https://img.shields.io/badge/Windows%2010%20%2F%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/BallisticOK/ZFTP/releases)
-[![.NET 8](https://img.shields.io/badge/.NET%208%20%2B%20WPF-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
-[![price](https://img.shields.io/badge/price-%240.00%20forever-22C55E?style=for-the-badge)](#-why-it-exists)
-
-<br/>
-
-**11 storage types. One drive letter each. Zero subscriptions.**
-
-[Download](#-install) &nbsp;•&nbsp; [Features](#-features) &nbsp;•&nbsp; [How it works](#-how-it-works) &nbsp;•&nbsp; [Providers](#-supported-storage) &nbsp;•&nbsp; [Build](#-build-from-source)
-
-<br/>
-
-<img src="docs/images/main.png" width="760" alt="ZFTP main window" />
-
-</div>
-
----
-
-## ✨ What is this
-
-ZFTP turns remote storage into a **regular drive letter** on your PC. Set it up once, hit Mount, and it shows up in **This PC** like any other disk. Open it in File Explorer, drag files in and out, edit documents straight off it, point any program at it. No FTP client, no "download, edit, re-upload" dance, no browser tab to some cloud UI.
-
-It started as an SFTP tool. It now mounts **eleven kinds of storage** through one clean app:
-
-<div align="center">
-
-| 🗄️ Servers | ☁️ Cloud | 📱 Devices |
-|:---:|:---:|:---:|
-| SFTP · FTP · FTPS · WebDAV | S3 · Google Drive · Dropbox · OneDrive · Box | Android (USB) · iPhone / iPad (USB) |
+![version](https://img.shields.io/badge/version-2.3.0-2D7DD2)
+![platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0078D6)
+![built with](https://img.shields.io/badge/built%20with-.NET%208%20%2B%20WPF-512BD4)
 
 </div>
 
