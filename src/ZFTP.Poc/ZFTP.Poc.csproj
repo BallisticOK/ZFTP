@@ -1,15 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <!-- Pure ZFTP.Core CLI test tool - no WinFsp/WPF, so unlike ZFTP.App it
+         needs no Windows-only TFM. Builds and runs on Linux/macOS too. -->
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PlatformTarget>x64</PlatformTarget>
-    <Platforms>x64</Platforms>
-    <!-- See ZFTP.App.csproj: pins native-asset selection to Windows so packages
-         that ship binaries for every OS don't copy macOS/Linux ones in too. -->
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <SelfContained>false</SelfContained>
   </PropertyGroup>
 

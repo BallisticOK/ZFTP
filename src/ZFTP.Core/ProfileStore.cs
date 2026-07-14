@@ -70,6 +70,7 @@ public static class ProfileStore
         public string DeviceSerial { get; set; } = "";
         public string RemoteRoot { get; set; } = "/";
         public string DriveLetter { get; set; } = "Z";
+        public string MountPath { get; set; } = "";
         public bool Enabled { get; set; } = true;
         public bool AutoMount { get; set; }
         public AccessMode Access { get; set; } = AccessMode.ReadWrite;
@@ -114,6 +115,7 @@ public static class ProfileStore
             DeviceSerial = p.DeviceSerial,
             RemoteRoot = p.RemoteRoot,
             DriveLetter = p.DriveLetter,
+            MountPath = p.MountPath,
             Enabled = p.Enabled,
             AutoMount = p.AutoMount,
             Access = p.Access,
@@ -167,6 +169,7 @@ public static class ProfileStore
                 DeviceSerial = s.DeviceSerial,
                 RemoteRoot = s.RemoteRoot,
                 DriveLetter = s.DriveLetter,
+                MountPath = s.MountPath,
                 Enabled = s.Enabled,
                 AutoMount = s.AutoMount,
                 Access = s.Access,

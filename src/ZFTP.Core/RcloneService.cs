@@ -21,9 +21,12 @@ namespace ZFTP.Core;
 
 public static class RcloneService
 {
-    /// <summary>Path to the bundled rclone.exe (sits in a "tools" folder next to ZFTP.exe).</summary>
-    public static string RclonePath =>
-        Path.Combine(AppContext.BaseDirectory, "tools", "rclone.exe");
+    private static readonly string RcloneExeName = OperatingSystem.IsWindows() ? "rclone.exe" : "rclone";
+
+    /// <summary>Path to rclone: the bundled copy in a "tools" folder next to ZFTP.exe
+    /// if present (how Windows ships it today), otherwise whatever "rclone" resolves
+    /// to on PATH (how it's expected to be installed on Linux/macOS for now).</summary>
+    public static string RclonePath => ToolResolver.Resolve(RcloneExeName);
 
     /// <summary>ZFTP's private rclone config file.</summary>
     public static string ConfigPath =>
@@ -41,6 +44,9 @@ public static class RcloneService
 
     private static string RcloneType(ProviderType t) => t switch
     {
+        // Only reached on non-Windows - see MountSession.MountRcloneSftp(). Windows
+        // still mounts Sftp through the native WinFsp+SSH.NET engine.
+        ProviderType.Sftp => "sftp",
         ProviderType.Ftp or ProviderType.Ftps => "ftp",
         ProviderType.WebDav => "webdav",
         ProviderType.S3 => "s3",
@@ -94,6 +100,20 @@ public static class RcloneService
 
         switch (p.Provider)
         {
+            case ProviderType.Sftp:
+                args.AddRange(new[] { "host", p.Host, "user", p.Username });
+                if (p.Port > 0) args.AddRange(new[] { "port", p.Port.ToString() });
+                if (p.Auth == AuthMethod.PrivateKey && !string.IsNullOrWhiteSpace(p.KeyPath))
+                {
+                    args.AddRange(new[] { "key_file", p.KeyPath });
+                    if (!string.IsNullOrEmpty(p.KeyPassphrase)) args.AddRange(new[] { "key_file_pass", p.KeyPassphrase });
+                }
+                else
+                {
+                    args.AddRange(new[] { "pass", p.Password });
+                }
+                break;
+
             case ProviderType.Ftp:
             case ProviderType.Ftps:
                 args.AddRange(new[] { "host", p.Host, "user", p.Username, "pass", p.Password });

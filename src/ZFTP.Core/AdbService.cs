@@ -20,9 +20,12 @@ namespace ZFTP.Core;
 
 public static class AdbService
 {
-    /// <summary>Path to the bundled adb.exe (sits in a "tools" folder next to ZFTP.exe).</summary>
-    public static string AdbPath =>
-        Path.Combine(AppContext.BaseDirectory, "tools", "adb.exe");
+    private static readonly string AdbExeName = OperatingSystem.IsWindows() ? "adb.exe" : "adb";
+
+    /// <summary>Path to adb: the bundled copy in a "tools" folder next to ZFTP.exe if
+    /// present (how Windows ships it today), otherwise whatever "adb" resolves to on
+    /// PATH (how it's expected to be installed on Linux/macOS for now).</summary>
+    public static string AdbPath => ToolResolver.Resolve(AdbExeName);
 
     public static bool Available => File.Exists(AdbPath);
 

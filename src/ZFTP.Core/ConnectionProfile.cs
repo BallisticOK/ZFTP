@@ -121,8 +121,12 @@ public sealed class ConnectionProfile
     /// means "use the only connected device" and is resolved at mount time.</summary>
     public string DeviceSerial { get; set; } = "";
 
-    /// <summary>Drive letter to mount on, e.g. "Z".</summary>
+    /// <summary>Drive letter to mount on, e.g. "Z". Windows only.</summary>
     public string DriveLetter { get; set; } = "Z";
+
+    /// <summary>Directory to mount on (Linux/macOS only - there's no drive-letter
+    /// concept there). Blank means "pick a default under ~/ZFTP/mounts".</summary>
+    public string MountPath { get; set; } = "";
 
     /// <summary>Read &amp; write (default) or read-only.</summary>
     public AccessMode Access { get; set; } = AccessMode.ReadWrite;
@@ -142,7 +146,7 @@ public sealed class ConnectionProfile
         Auth = o.Auth; Password = o.Password; KeyPath = o.KeyPath; KeyPassphrase = o.KeyPassphrase;
         KnownHostKey = o.KnownHostKey;
         DeviceSerial = o.DeviceSerial;
-        RemoteRoot = o.RemoteRoot; DriveLetter = o.DriveLetter; Enabled = o.Enabled; AutoMount = o.AutoMount;
+        RemoteRoot = o.RemoteRoot; DriveLetter = o.DriveLetter; MountPath = o.MountPath; Enabled = o.Enabled; AutoMount = o.AutoMount;
         Access = o.Access; Provider = o.Provider; Color = o.Color;
         Url = o.Url; S3AccessKey = o.S3AccessKey; S3Secret = o.S3Secret;
         S3Region = o.S3Region; S3Endpoint = o.S3Endpoint; S3Bucket = o.S3Bucket;

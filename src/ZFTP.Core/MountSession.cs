@@ -1,14 +1,22 @@
 // ============================================================================
 //  ZFTP — MountSession
 //  ---------------------------------------------------------------------------
-//  Wraps the whole "connect to SFTP + present a drive letter" lifecycle for a
-//  single server, so the GUI can just call MountAsync() / Unmount() and watch
-//  the State change. One MountSession == one drive.
+//  Wraps the whole "connect to a server + present it as a mounted drive"
+//  lifecycle for a single profile, so the host (GUI or headless) can just call
+//  MountAsync() / Unmount() and watch State change. One MountSession == one drive.
+//
+//  On Windows, SFTP/Android/iPhone use native engines (WinFsp + Fsp.FileSystemHost)
+//  and everything else goes through rclone. On Linux/macOS there's no WinFsp, so
+//  SFTP is routed through rclone's own sftp backend instead, and Android/iPhone
+//  (no rclone backend, no native engine here) aren't supported yet - see the
+//  #if WINDOWS blocks below for exactly where the two platforms diverge.
 // ============================================================================
 
 using System.Diagnostics;
 using System.IO;
+#if WINDOWS
 using Fsp;
+#endif
 using Renci.SshNet;
 
 namespace ZFTP.Core;
@@ -30,14 +38,18 @@ public sealed class MountSession : IDisposable
     public string MountPoint { get; private set; } = "";
 
     private SftpClient? _client;
+#if WINDOWS
     private FileSystemHost? _host;
     private SftpFileSystem? _fs;
     private AdbFileSystem? _adb;     // used for the Android (adb) provider
     private AfcFileSystem? _afc;     // used for the iPhone/iPad (Apple AFC) provider
-    private Process? _rcloneProc;   // used for non-SFTP (rclone-backed) drives
+#endif
+    private Process? _rcloneProc;   // used for non-SFTP (rclone-backed) drives, and (non-Windows only) SFTP too
 
     private SshClient? _statsClient;        // separate SSH channel used only to run `df`
+#if WINDOWS
     private volatile bool _statsUnsupported; // server blocked exec / df missing → stop probing
+#endif
 
     private readonly object _sync = new();
     private volatile bool _shouldBeMounted;   // user wants this mounted → watchdog keeps it alive
@@ -58,8 +70,13 @@ public sealed class MountSession : IDisposable
     public bool IsMounted => State == MountState.Mounted;
 
     /// <summary>Total bytes downloaded/uploaded this session (for the speed display).</summary>
+#if WINDOWS
     public long BytesRead => _fs?.BytesRead ?? _adb?.BytesRead ?? _afc?.BytesRead ?? 0;
     public long BytesWritten => _fs?.BytesWritten ?? _adb?.BytesWritten ?? _afc?.BytesWritten ?? 0;
+#else
+    public long BytesRead => 0;
+    public long BytesWritten => 0;
+#endif
 
     /// <summary>Connect and mount on a background thread (keeps the UI responsive).</summary>
     public Task<bool> MountAsync() => Task.Run(Mount);
@@ -71,21 +88,29 @@ public sealed class MountSession : IDisposable
             _busy = true;
             try
             {
+#if WINDOWS
                 // Make sure WinFsp's native DLL is loaded before any Fsp type is used.
                 WinFspNative.EnsureLoaded();
                 if (!WinFspNative.Available)
                     throw new InvalidOperationException(
                         "WinFsp is not installed. ZFTP needs WinFsp to create drive letters. " +
                         "Reinstall ZFTP (the installer includes WinFsp) or install it from winfsp.dev.");
+#endif
 
-                MountPoint = Profile.DriveLetter.TrimEnd(':', '\\') + ":";
+                MountPoint = MountTarget.Resolve(Profile);
 
-                // SFTP and Android use our native engines; every other provider goes through rclone.
                 return Profile.Provider switch
                 {
+#if WINDOWS
                     ProviderType.Sftp => MountSftp(),
                     ProviderType.Android => MountAndroid(),
                     ProviderType.IPhone => MountApple(),
+#else
+                    ProviderType.Sftp => MountRcloneSftp(),
+                    ProviderType.Android or ProviderType.IPhone => throw new PlatformNotSupportedException(
+                        "Android and iPhone drives aren't supported on this OS yet — they need " +
+                        "Windows (adb/AFC + WinFsp aren't available here)."),
+#endif
                     _ => MountRclone(),
                 };
             }
@@ -113,18 +138,22 @@ public sealed class MountSession : IDisposable
         {
             if (!_shouldBeMounted || _busy) return;
 
+#if WINDOWS
             // While healthily mounted, keep the SFTP drive's reported size current.
             if (State == MountState.Mounted && Profile.Provider == ProviderType.Sftp && !_statsUnsupported)
                 Task.Run(RefreshDiskSpace);
+#endif
 
             bool dead;
             try
             {
                 dead = Profile.Provider switch
                 {
+#if WINDOWS
                     ProviderType.Sftp => _client == null || !_client.IsConnected,
                     ProviderType.Android => _adb == null || !AdbService.DeviceConnected(ResolveSerial()),
                     ProviderType.IPhone => _afc == null || !AppleDeviceService.DeviceConnected(ResolveSerial()),
+#endif
                     _ => _rcloneProc == null || _rcloneProc.HasExited,
                 };
             }
@@ -138,13 +167,17 @@ public sealed class MountSession : IDisposable
                 try
                 {
                     SetState(MountState.Reconnecting);
-                    Cleanup();   // free the drive letter from the dead mount
-                    MountPoint = Profile.DriveLetter.TrimEnd(':', '\\') + ":";
+                    Cleanup();   // free the mount point from the dead mount
+                    MountPoint = MountTarget.Resolve(Profile);
                     bool ok = Profile.Provider switch
                     {
+#if WINDOWS
                         ProviderType.Sftp => MountSftp(),
                         ProviderType.Android => MountAndroid(),
                         ProviderType.IPhone => MountApple(),
+#else
+                        ProviderType.Sftp => MountRcloneSftp(),
+#endif
                         _ => MountRclone(),
                     };
                     if (!ok && _shouldBeMounted) SetState(MountState.Reconnecting);
@@ -156,7 +189,8 @@ public sealed class MountSession : IDisposable
         catch { /* swallow — never crash the timer thread */ }
     }
 
-    // ---- rclone-backed providers (FTP/FTPS/WebDAV/S3/cloud drives) ----------
+    // ---- rclone-backed providers (FTP/FTPS/WebDAV/S3/cloud drives, and on
+    // non-Windows SFTP too) ---------------------------------------------------
 
     private bool MountRclone()
     {
@@ -193,6 +227,71 @@ public sealed class MountSession : IDisposable
         throw new InvalidOperationException("Timed out waiting for the drive to appear.");
     }
 
+#if !WINDOWS
+    /// <summary>
+    /// Non-Windows SFTP path: verify the host key ourselves first (same
+    /// trust-on-first-use check the native Windows engine does — see
+    /// VerifyHostKeyTofu), then hand the actual mount to rclone's own sftp
+    /// backend + `rclone mount`, since there's no WinFsp here to host the
+    /// native SftpFileSystem engine.
+    /// </summary>
+    private bool MountRcloneSftp()
+    {
+        SetState(MountState.Connecting);
+
+        if (LooksLikeFtpServer(Profile.Host, Profile.Port))
+            throw new InvalidOperationException(
+                "This looks like an FTP server, not an SFTP (SSH) server — they're " +
+                "different protocols. Open this drive's Edit dialog, change its Type " +
+                "to \"FTP\" (or \"FTPS\" if it uses TLS), and reconnect.");
+
+        VerifyHostKeyTofu();
+        return MountRclone();
+    }
+
+    /// <summary>
+    /// Trust-on-first-use host key check, done over a throwaway SSH connection
+    /// before rclone ever touches the server — so a changed/impersonated host
+    /// key is still refused even though the real file I/O now goes through
+    /// rclone's own SSH transport rather than SSH.NET.
+    /// </summary>
+    private void VerifyHostKeyTofu()
+    {
+        bool hostKeyMismatch = false;
+        using var probe = new SshClient(BuildConnectionInfo());
+        probe.HostKeyReceived += (_, e) =>
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var fp = Convert.ToBase64String(sha.ComputeHash(e.HostKey));
+            if (string.IsNullOrEmpty(Profile.KnownHostKey))
+            {
+                Profile.KnownHostKey = fp;     // trust on first use
+                e.CanTrust = true;
+            }
+            else if (Profile.KnownHostKey == fp)
+            {
+                e.CanTrust = true;
+            }
+            else
+            {
+                hostKeyMismatch = true;
+                e.CanTrust = false;
+            }
+        };
+
+        try { probe.Connect(); }
+        catch when (hostKeyMismatch)
+        {
+            throw new InvalidOperationException(
+                "The server's identity (host key) has CHANGED since you last connected. " +
+                "That can mean the server was rebuilt — or that something is impersonating it. " +
+                "If you trust this change, tick \"Forget saved server key\" in this drive's Edit dialog, then reconnect.");
+        }
+        finally { try { probe.Disconnect(); } catch { /* ignore */ } }
+    }
+#endif
+
+#if WINDOWS
     // ---- native Android (adb) engine ---------------------------------------
 
     /// <summary>
@@ -273,7 +372,7 @@ public sealed class MountSession : IDisposable
                 FileSystemName = "ZFTP",
             };
 
-            MountPoint = Profile.DriveLetter.TrimEnd(':', '\\') + ":";
+            MountPoint = MountTarget.Resolve(Profile);
             int status = _host.Mount(MountPoint, null, true, 0);
             if (status != 0)
             {
@@ -368,7 +467,7 @@ public sealed class MountSession : IDisposable
                 FileSystemName = "ZFTP",
             };
 
-            MountPoint = Profile.DriveLetter.TrimEnd(':', '\\') + ":";
+            MountPoint = MountTarget.Resolve(Profile);
             int status = _host.Mount(MountPoint, null, true, 0);
             if (status != 0)
             {
@@ -474,7 +573,7 @@ public sealed class MountSession : IDisposable
                 // Local drives don't leave the disconnected "ghost" cache entries.
             };
 
-            MountPoint = Profile.DriveLetter.TrimEnd(':', '\\') + ":";
+            MountPoint = MountTarget.Resolve(Profile);
             int status = _host.Mount(MountPoint, null, true, 0);
             if (status != 0)
             {
@@ -587,6 +686,7 @@ public sealed class MountSession : IDisposable
         }
         return false;
     }
+#endif
 
     public void Unmount()
     {
@@ -600,26 +700,58 @@ public sealed class MountSession : IDisposable
 
     private void Cleanup()
     {
-        // native SFTP / Android share the WinFsp host
+#if WINDOWS
+        // native SFTP / Android / iPhone share the WinFsp host
         try { _host?.Unmount(); } catch { /* ignore */ }
+#endif
         try { _client?.Disconnect(); } catch { /* ignore */ }
         try { _client?.Dispose(); } catch { /* ignore */ }
         try { _statsClient?.Disconnect(); } catch { /* ignore */ }
         try { _statsClient?.Dispose(); } catch { /* ignore */ }
+        _client = null;
+        _statsClient = null;
+#if WINDOWS
         try { _adb?.Dispose(); } catch { /* ignore */ }
         try { _afc?.Dispose(); } catch { /* ignore */ }
         _host = null;
-        _client = null;
         _fs = null;
         _adb = null;
         _afc = null;
-        _statsClient = null;
+#endif
 
-        // rclone-backed: killing rclone unmounts its drive (WinFsp tears down on exit)
+        // rclone-backed: killing rclone unmounts its drive (WinFsp tears down on
+        // exit on Windows; on Linux/macOS the FUSE session should too, but a
+        // forceful Kill() can occasionally leave the mountpoint in a stuck
+        // "Transport endpoint is not connected" state, so we also force-unmount it).
         try { if (_rcloneProc is { HasExited: false }) _rcloneProc.Kill(); } catch { /* ignore */ }
         try { _rcloneProc?.Dispose(); } catch { /* ignore */ }
         _rcloneProc = null;
+#if !WINDOWS
+        TryForceUnmount();
+#endif
     }
+
+#if !WINDOWS
+    /// <summary>Best-effort fallback in case killing rclone didn't cleanly release
+    /// the FUSE mountpoint. Safe to call even when nothing is mounted there.</summary>
+    private void TryForceUnmount()
+    {
+        if (string.IsNullOrEmpty(MountPoint)) return;
+        try
+        {
+            var psi = OperatingSystem.IsMacOS()
+                ? new ProcessStartInfo("umount") { ArgumentList = { MountPoint } }
+                : new ProcessStartInfo("fusermount") { ArgumentList = { "-uz", MountPoint } };
+            psi.UseShellExecute = false;
+            psi.CreateNoWindow = true;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError = true;
+            using var p = Process.Start(psi);
+            p?.WaitForExit(3000);
+        }
+        catch { /* best effort - rclone's own exit usually already released it */ }
+    }
+#endif
 
     /// <summary>
     /// Quick, best-effort check for "is the thing on the other end actually an FTP
