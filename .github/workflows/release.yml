@@ -20,6 +20,9 @@ permissions:
 jobs:
   build-and-release:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag_name: ${{ steps.version.outputs.tag_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -152,3 +155,35 @@ jobs:
           name: ZFTP ${{ steps.version.outputs.version }}
           body_path: changelog.md
           files: dist/ZFTP-Setup-*.exe
+
+  build-linux:
+    # Runs after the Windows job so the GitHub Release already exists - this
+    # job just adds Linux assets to it. A tarball (always works) plus an
+    # AppImage (needs an actual Linux host to run appimagetool - not possible
+    # from a Windows machine, which is exactly why this lives in CI).
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build tarball
+        run: installer/linux/build-tarball.sh "${{ needs.build-and-release.outputs.version }}"
+
+      - name: Build AppImage
+        run: installer/linux/build-appimage.sh "${{ needs.build-and-release.outputs.version }}"
+
+      - name: Upload Linux assets to the release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.build-and-release.outputs.tag_name }}
+          files: |
+            dist/ZFTP-*-linux-x64.tar.gz
+            dist/ZFTP-*-x86_64.AppImage

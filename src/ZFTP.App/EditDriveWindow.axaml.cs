@@ -4,20 +4,18 @@
 //  for cloud drives runs rclone's browser sign-in.
 // ============================================================================
 
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using Wpf.Ui.Controls;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using ZFTP.Core;
-using MessageBox = System.Windows.MessageBox;
-using MessageBoxButton = System.Windows.MessageBoxButton;
-using MessageBoxImage = System.Windows.MessageBoxImage;
-using Brush = System.Windows.Media.Brush;
-using TextBlock = System.Windows.Controls.TextBlock;
 
 namespace ZFTP.App;
 
-public partial class EditDriveWindow : FluentWindow
+public partial class EditDriveWindow : Window
 {
     public ConnectionProfile Result { get; }
 
@@ -43,10 +41,21 @@ public partial class EditDriveWindow : FluentWindow
         InitializeComponent();
         Result = profile;
 
-        var want = (profile.DriveLetter ?? "Z").TrimEnd(':') + ":";
-        var letters = driveLetters.Select(l => l.TrimEnd(':') + ":").ToList();
-        if (!letters.Contains(want, StringComparer.OrdinalIgnoreCase)) letters.Insert(0, want);
-        foreach (var l in letters) DriveCombo.Items.Add(l);
+        if (OperatingSystem.IsWindows())
+        {
+            var want = (profile.DriveLetter ?? "Z").TrimEnd(':') + ":";
+            var letters = driveLetters.Select(l => l.TrimEnd(':') + ":").ToList();
+            if (!letters.Contains(want, StringComparer.OrdinalIgnoreCase)) letters.Insert(0, want);
+            foreach (var l in letters) DriveCombo.Items.Add(l);
+        }
+        else
+        {
+            // No drive-letter concept here - a directory path instead (blank = auto
+            // default under ~/ZFTP/mounts, resolved at mount time by MountTarget).
+            DriveFieldLabel.Text = "Mount path";
+            DriveCombo.IsVisible = false;
+            MountPathBox.IsVisible = true;
+        }
 
         BuildColorCombo();
         LoadForm(profile);
@@ -56,15 +65,14 @@ public partial class EditDriveWindow : FluentWindow
     {
         foreach (var (name, hex) in Colors)
         {
-            var sp = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
-            sp.Children.Add(new System.Windows.Shapes.Rectangle
+            var sp = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8 };
+            sp.Children.Add(new Rectangle
             {
                 Width = 14, Height = 14, RadiusX = 3, RadiusY = 3,
-                Margin = new Thickness(0, 0, 8, 0),
-                Fill = (Brush)new BrushConverter().ConvertFromString(hex)!,
-                VerticalAlignment = VerticalAlignment.Center,
+                Fill = Brush.Parse(hex),
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
             });
-            sp.Children.Add(new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
+            sp.Children.Add(new TextBlock { Text = name, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
             ColorCombo.Items.Add(new ComboBoxItem { Content = sp, Tag = hex });
         }
     }
@@ -78,38 +86,43 @@ public partial class EditDriveWindow : FluentWindow
         UserBox.Text = p.Username;
         UrlBox.Text = p.Url;
         AuthCombo.SelectedIndex = p.Auth == AuthMethod.PrivateKey ? 1 : 0;
-        PasswordBox.Password = p.Password;
+        PasswordBox.Text = p.Password;
         KeyPathBox.Text = p.KeyPath;
-        KeyPassBox.Password = p.KeyPassphrase;
+        KeyPassBox.Text = p.KeyPassphrase;
         S3KeyBox.Text = p.S3AccessKey;
-        S3SecretBox.Password = p.S3Secret;
+        S3SecretBox.Text = p.S3Secret;
         S3BucketBox.Text = p.S3Bucket;
         S3RegionBox.Text = p.S3Region;
         S3EndpointBox.Text = p.S3Endpoint;
         SmbShareBox.Text = p.SmbShare;
         SmbDomainBox.Text = p.SmbDomain;
         B2AccountBox.Text = p.B2AccountId;
-        B2KeyBox.Password = p.B2ApplicationKey;
+        B2KeyBox.Text = p.B2ApplicationKey;
         B2BucketBox.Text = p.B2Bucket;
         AzureAccountBox.Text = p.AzureAccount;
-        AzureKeyBox.Password = p.AzureKey;
+        AzureKeyBox.Text = p.AzureKey;
         AzureContainerBox.Text = p.AzureContainer;
         ProtonTwoFactorBox.Text = p.ProtonTwoFactorCode;
-        ProtonMailboxPasswordBox.Password = p.ProtonMailboxPassword;
+        ProtonMailboxPasswordBox.Text = p.ProtonMailboxPassword;
         ClientIdBox.Text = p.ClientId;
-        ClientSecretBox.Password = p.ClientSecret;
+        ClientSecretBox.Text = p.ClientSecret;
         RootBox.Text = string.IsNullOrEmpty(p.RemoteRoot) ? "/" : p.RemoteRoot;
         EnabledToggle.IsChecked = p.Enabled;
         AutoMountToggle.IsChecked = p.AutoMount;
         AccessCombo.SelectedIndex = p.Access == AccessMode.ReadOnly ? 1 : 0;
+        MountPathBox.Text = p.MountPath;
 
         int ci = Array.FindIndex(Colors, c => c.Hex.Equals(p.Color, StringComparison.OrdinalIgnoreCase));
         ColorCombo.SelectedIndex = ci >= 0 ? ci : 0;
 
-        foreach (var obj in DriveCombo.Items)
-            if (obj is string s && s.Equals((p.DriveLetter ?? "Z").TrimEnd(':') + ":", StringComparison.OrdinalIgnoreCase))
-            { DriveCombo.SelectedItem = obj; break; }
-        if (DriveCombo.SelectedIndex < 0 && DriveCombo.Items.Count > 0) DriveCombo.SelectedIndex = 0;
+        if (OperatingSystem.IsWindows())
+        {
+            var want = (p.DriveLetter ?? "Z").TrimEnd(':') + ":";
+            foreach (var obj in DriveCombo.Items)
+                if (obj is string s && s.Equals(want, StringComparison.OrdinalIgnoreCase))
+                { DriveCombo.SelectedItem = obj; break; }
+            if (DriveCombo.SelectedIndex < 0 && DriveCombo.Items.Count > 0) DriveCombo.SelectedIndex = 0;
+        }
 
         UpdateProviderVisibility();
     }
@@ -117,7 +130,7 @@ public partial class EditDriveWindow : FluentWindow
     private ProviderType SelectedProvider() =>
         ProviderOrder[Math.Max(0, TypeCombo.SelectedIndex)];
 
-    private void TypeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void TypeCombo_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (PortBox == null) return; // during init
         var pt = SelectedProvider();
@@ -157,19 +170,19 @@ public partial class EditDriveWindow : FluentWindow
         bool android = pt == ProviderType.Android;
         bool apple = pt == ProviderType.IPhone;
 
-        HostPanel.Visibility = (sftp || ftpish || smb) ? Visibility.Visible : Visibility.Collapsed;
-        UrlPanel.Visibility = webdav ? Visibility.Visible : Visibility.Collapsed;
-        UserPanel.Visibility = (sftp || ftpish || webdav || smb || mega || proton) ? Visibility.Visible : Visibility.Collapsed;
-        AuthPanel.Visibility = sftp ? Visibility.Visible : Visibility.Collapsed;
-        S3Panel.Visibility = s3 ? Visibility.Visible : Visibility.Collapsed;
-        SmbPanel.Visibility = smb ? Visibility.Visible : Visibility.Collapsed;
-        B2Panel.Visibility = b2 ? Visibility.Visible : Visibility.Collapsed;
-        AzurePanel.Visibility = azure ? Visibility.Visible : Visibility.Collapsed;
-        ProtonPanel.Visibility = proton ? Visibility.Visible : Visibility.Collapsed;
-        OAuthPanel.Visibility = oauth ? Visibility.Visible : Visibility.Collapsed;
-        AndroidPanel.Visibility = android ? Visibility.Visible : Visibility.Collapsed;
-        ApplePanel.Visibility = apple ? Visibility.Visible : Visibility.Collapsed;
-        if (pt != ProviderType.OneDrive) { OnedriveDriveCard.Visibility = Visibility.Collapsed; _onedriveResumeState = null; }
+        HostPanel.IsVisible = sftp || ftpish || smb;
+        UrlPanel.IsVisible = webdav;
+        UserPanel.IsVisible = sftp || ftpish || webdav || smb || mega || proton;
+        AuthPanel.IsVisible = sftp;
+        S3Panel.IsVisible = s3;
+        SmbPanel.IsVisible = smb;
+        B2Panel.IsVisible = b2;
+        AzurePanel.IsVisible = azure;
+        ProtonPanel.IsVisible = proton;
+        OAuthPanel.IsVisible = oauth;
+        AndroidPanel.IsVisible = android;
+        ApplePanel.IsVisible = apple;
+        if (pt != ProviderType.OneDrive) { OnedriveDriveCard.IsVisible = false; _onedriveResumeState = null; }
         if (oauth) UpdateOAuthStatus();
         if (android) LoadDevices(Result.DeviceSerial);
         if (apple) LoadAppleDevices(Result.DeviceSerial);
@@ -178,29 +191,33 @@ public partial class EditDriveWindow : FluentWindow
             UpdateAuthVisibility();
         else
         {
-            KeyPanel.Visibility = Visibility.Collapsed;
-            PasswordPanel.Visibility = (ftpish || webdav || smb || mega || proton) ? Visibility.Visible : Visibility.Collapsed;
+            KeyPanel.IsVisible = false;
+            PasswordPanel.IsVisible = ftpish || webdav || smb || mega || proton;
         }
     }
 
-    private void AuthCombo_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateAuthVisibility();
+    private void AuthCombo_SelectionChanged(object? sender, SelectionChangedEventArgs e) => UpdateAuthVisibility();
 
     private void UpdateAuthVisibility()
     {
         if (PasswordPanel == null || KeyPanel == null) return;
         if (SelectedProvider() != ProviderType.Sftp) return;
         bool useKey = AuthCombo.SelectedIndex == 1;
-        PasswordPanel.Visibility = useKey ? Visibility.Collapsed : Visibility.Visible;
-        KeyPanel.Visibility = useKey ? Visibility.Visible : Visibility.Collapsed;
+        PasswordPanel.IsVisible = !useKey;
+        KeyPanel.IsVisible = useKey;
     }
 
-    private void Browse_Click(object sender, RoutedEventArgs e)
+    private async void Browse_Click(object? sender, RoutedEventArgs e)
     {
-        var dlg = new Microsoft.Win32.OpenFileDialog { Title = "Select your SSH private key" };
-        if (dlg.ShowDialog() == true) KeyPathBox.Text = dlg.FileName;
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Select your SSH private key",
+            AllowMultiple = false,
+        });
+        if (files.Count > 0) KeyPathBox.Text = files[0].TryGetLocalPath() ?? files[0].Name;
     }
 
-    private async void SignIn_Click(object sender, RoutedEventArgs e)
+    private async void SignIn_Click(object? sender, RoutedEventArgs e)
     {
         // Commit current fields to Result first so the rclone remote name is stable.
         ReadInto(Result);
@@ -221,7 +238,7 @@ public partial class EditDriveWindow : FluentWindow
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Couldn't start sign-in: " + ex.Message, "ZFTP", MessageBoxButton.OK, MessageBoxImage.Warning);
+            await Dialogs.ShowMessageAsync("ZFTP", "Couldn't start sign-in: " + ex.Message);
         }
         finally
         {
@@ -235,17 +252,17 @@ public partial class EditDriveWindow : FluentWindow
 
     private async Task SignInOnedriveAsync()
     {
-        OnedriveDriveCard.Visibility = Visibility.Collapsed;
+        OnedriveDriveCard.IsVisible = false;
         SignInButton.IsEnabled = false;
         try
         {
             OAuthStatusText.Text = "Signing in… finish in the browser window that opened.";
             var token = await RcloneService.AuthorizeOnedriveAsync(Result, url =>
-                Dispatcher.BeginInvoke(() => OAuthStatusText.Text = "Browser didn't open? Copy this link: " + url));
+                Dispatcher.UIThread.Post(() => OAuthStatusText.Text = "Browser didn't open? Copy this link: " + url));
             if (token == null)
             {
                 OAuthStatusText.Text = "Not signed in.";
-                MessageBox.Show("Sign-in didn't complete. Try again.", "ZFTP", MessageBoxButton.OK, MessageBoxImage.Warning);
+                await Dialogs.ShowMessageAsync("ZFTP", "Sign-in didn't complete. Try again.");
                 return;
             }
 
@@ -254,7 +271,7 @@ public partial class EditDriveWindow : FluentWindow
             if (wizard.Error != null)
             {
                 OAuthStatusText.Text = "Not signed in.";
-                MessageBox.Show(wizard.Error, "ZFTP", MessageBoxButton.OK, MessageBoxImage.Warning);
+                await Dialogs.ShowMessageAsync("ZFTP", wizard.Error);
                 return;
             }
 
@@ -263,12 +280,12 @@ public partial class EditDriveWindow : FluentWindow
             foreach (var c in wizard.Choices!)
                 OnedriveDriveCombo.Items.Add(new ComboBoxItem { Content = c.Label, Tag = c.Value });
             OnedriveDriveCombo.SelectedIndex = RcloneService.GuessDefaultOnedriveDrive(wizard.Choices!);
-            OnedriveDriveCard.Visibility = Visibility.Visible;
+            OnedriveDriveCard.IsVisible = true;
             OAuthStatusText.Text = "Pick your OneDrive below, then click \"Use this drive\".";
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Couldn't start sign-in: " + ex.Message, "ZFTP", MessageBoxButton.OK, MessageBoxImage.Warning);
+            await Dialogs.ShowMessageAsync("ZFTP", "Couldn't start sign-in: " + ex.Message);
         }
         finally
         {
@@ -276,7 +293,7 @@ public partial class EditDriveWindow : FluentWindow
         }
     }
 
-    private async void OnedriveChoose_Click(object sender, RoutedEventArgs e)
+    private async void OnedriveChoose_Click(object? sender, RoutedEventArgs e)
     {
         if (_onedriveResumeState == null || OnedriveDriveCombo.SelectedItem is not ComboBoxItem item) return;
         var driveId = item.Tag as string ?? "";
@@ -288,12 +305,12 @@ public partial class EditDriveWindow : FluentWindow
             var result = await Task.Run(() => RcloneService.FinishOnedriveWizard(Result, _onedriveResumeState, driveId));
             if (result.Error != null)
             {
-                MessageBox.Show(result.Error, "ZFTP", MessageBoxButton.OK, MessageBoxImage.Warning);
+                await Dialogs.ShowMessageAsync("ZFTP", result.Error);
                 OAuthStatusText.Text = "Not signed in.";
                 return;
             }
 
-            OnedriveDriveCard.Visibility = Visibility.Collapsed;
+            OnedriveDriveCard.IsVisible = false;
             _onedriveResumeState = null;
             UpdateOAuthStatus();   // now shows "Signed in as …"
         }
@@ -330,7 +347,7 @@ public partial class EditDriveWindow : FluentWindow
     private string SelectedDeviceSerial() =>
         (DeviceCombo?.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
 
-    private void RefreshDevices_Click(object sender, RoutedEventArgs e) => LoadDevices(SelectedDeviceSerial());
+    private void RefreshDevices_Click(object? sender, RoutedEventArgs e) => LoadDevices(SelectedDeviceSerial());
 
     /// <summary>Fill the device combo from `adb devices` (off the UI thread), keeping
     /// the wanted serial selected if it's present.</summary>
@@ -395,14 +412,15 @@ public partial class EditDriveWindow : FluentWindow
     private string SelectedAppleSerial() =>
         (AppleDeviceCombo?.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
 
-    private void RefreshAppleDevices_Click(object sender, RoutedEventArgs e) => LoadAppleDevices(SelectedAppleSerial());
+    private void RefreshAppleDevices_Click(object? sender, RoutedEventArgs e) => LoadAppleDevices(SelectedAppleSerial());
 
-    /// <summary>Fill the Apple device combo from the bundled imobiledevice library
-    /// (off the UI thread), keeping the wanted UDID selected if it's present.</summary>
+    /// <summary>Fill the Apple device combo (off the UI thread), keeping the wanted
+    /// UDID selected if it's present. Windows only - see the #else stub.</summary>
     private async void LoadAppleDevices(string? desiredUdid)
     {
         if (AppleDeviceCombo == null || _loadingAppleDevices) return;
         _loadingAppleDevices = true;
+#if WINDOWS
         var want = (desiredUdid ?? "").Trim();
         try
         {
@@ -446,70 +464,84 @@ public partial class EditDriveWindow : FluentWindow
         }
         catch { /* leave whatever is in the combo */ }
         finally { _loadingAppleDevices = false; RefreshAppleButton.IsEnabled = true; }
+#else
+        // No AppleDeviceService on this OS yet (iMobileDevice-net only ships
+        // Windows binaries) - iPhone/iPad stays a Windows-only provider for now,
+        // same as MountSession's PlatformNotSupportedException at mount time.
+        await Task.Yield();
+        AppleDeviceCombo.Items.Clear();
+        AppleDeviceCombo.Items.Add(new ComboBoxItem { Content = "iPhone/iPad isn't supported on this OS yet", Tag = "", IsEnabled = false });
+        AppleDeviceCombo.SelectedIndex = 0;
+        RefreshAppleButton.IsEnabled = false;
+        _loadingAppleDevices = false;
+#endif
     }
 
-    private void Save_Click(object sender, RoutedEventArgs e)
+    private async void Save_Click(object? sender, RoutedEventArgs e)
     {
         var pt = SelectedProvider();
 
         // light validation per provider
         if ((pt is ProviderType.Sftp or ProviderType.Ftp or ProviderType.Ftps or ProviderType.Smb) && string.IsNullOrWhiteSpace(HostBox.Text))
-        { Warn("Please enter a host."); return; }
+        { await Warn("Please enter a host."); return; }
         if (pt == ProviderType.WebDav && string.IsNullOrWhiteSpace(UrlBox.Text))
-        { Warn("Please enter the WebDAV URL."); return; }
+        { await Warn("Please enter the WebDAV URL."); return; }
         if (pt == ProviderType.S3 && string.IsNullOrWhiteSpace(S3BucketBox.Text))
-        { Warn("Please enter the S3 bucket."); return; }
+        { await Warn("Please enter the S3 bucket."); return; }
         if (pt == ProviderType.Smb && string.IsNullOrWhiteSpace(SmbShareBox.Text))
-        { Warn("Please enter the share name."); return; }
+        { await Warn("Please enter the share name."); return; }
         if (pt == ProviderType.B2 && (string.IsNullOrWhiteSpace(B2AccountBox.Text) || string.IsNullOrWhiteSpace(B2BucketBox.Text)))
-        { Warn("Please enter the B2 Application Key ID and bucket."); return; }
+        { await Warn("Please enter the B2 Application Key ID and bucket."); return; }
         if (pt == ProviderType.Azure && (string.IsNullOrWhiteSpace(AzureAccountBox.Text) || string.IsNullOrWhiteSpace(AzureContainerBox.Text)))
-        { Warn("Please enter the Azure storage account and container."); return; }
+        { await Warn("Please enter the Azure storage account and container."); return; }
         if (pt == ProviderType.Mega && string.IsNullOrWhiteSpace(UserBox.Text))
-        { Warn("Please enter your Mega account email."); return; }
+        { await Warn("Please enter your Mega account email."); return; }
         if (pt == ProviderType.Proton && string.IsNullOrWhiteSpace(UserBox.Text))
-        { Warn("Please enter your Proton account username."); return; }
+        { await Warn("Please enter your Proton account username."); return; }
 
         ReadInto(Result);
-        DialogResult = true;
+        Close(true);
     }
 
     private void ReadInto(ConnectionProfile p)
     {
         p.Provider = SelectedProvider();
-        p.Name = string.IsNullOrWhiteSpace(NameBox.Text) ? "Server" : NameBox.Text.Trim();
-        p.Host = HostBox.Text.Trim();
+        p.Name = string.IsNullOrWhiteSpace(NameBox.Text) ? "Server" : NameBox.Text!.Trim();
+        p.Host = HostBox.Text?.Trim() ?? "";
         p.Port = int.TryParse(PortBox.Text, out var port) ? port
             : p.Provider is ProviderType.Ftp or ProviderType.Ftps ? 21
             : p.Provider == ProviderType.Smb ? 445
             : 22;
-        p.Username = UserBox.Text.Trim();
-        p.Url = UrlBox.Text.Trim();
+        p.Username = UserBox.Text?.Trim() ?? "";
+        p.Url = UrlBox.Text?.Trim() ?? "";
         p.Auth = AuthCombo.SelectedIndex == 1 ? AuthMethod.PrivateKey : AuthMethod.Password;
-        p.Password = PasswordBox.Password;
-        p.KeyPath = KeyPathBox.Text.Trim();
-        p.KeyPassphrase = KeyPassBox.Password;
-        p.S3AccessKey = S3KeyBox.Text.Trim();
-        p.S3Secret = S3SecretBox.Password;
-        p.S3Bucket = S3BucketBox.Text.Trim();
-        p.S3Region = S3RegionBox.Text.Trim();
-        p.S3Endpoint = S3EndpointBox.Text.Trim();
-        p.SmbShare = SmbShareBox.Text.Trim();
-        p.SmbDomain = SmbDomainBox.Text.Trim();
-        p.B2AccountId = B2AccountBox.Text.Trim();
-        p.B2ApplicationKey = B2KeyBox.Password;
-        p.B2Bucket = B2BucketBox.Text.Trim();
-        p.AzureAccount = AzureAccountBox.Text.Trim();
-        p.AzureKey = AzureKeyBox.Password;
-        p.AzureContainer = AzureContainerBox.Text.Trim();
-        p.ProtonTwoFactorCode = ProtonTwoFactorBox.Text.Trim();
-        p.ProtonMailboxPassword = ProtonMailboxPasswordBox.Password;
-        p.ClientId = ClientIdBox.Text.Trim();
-        p.ClientSecret = ClientSecretBox.Password;
+        p.Password = PasswordBox.Text ?? "";
+        p.KeyPath = KeyPathBox.Text?.Trim() ?? "";
+        p.KeyPassphrase = KeyPassBox.Text ?? "";
+        p.S3AccessKey = S3KeyBox.Text?.Trim() ?? "";
+        p.S3Secret = S3SecretBox.Text ?? "";
+        p.S3Bucket = S3BucketBox.Text?.Trim() ?? "";
+        p.S3Region = S3RegionBox.Text?.Trim() ?? "";
+        p.S3Endpoint = S3EndpointBox.Text?.Trim() ?? "";
+        p.SmbShare = SmbShareBox.Text?.Trim() ?? "";
+        p.SmbDomain = SmbDomainBox.Text?.Trim() ?? "";
+        p.B2AccountId = B2AccountBox.Text?.Trim() ?? "";
+        p.B2ApplicationKey = B2KeyBox.Text ?? "";
+        p.B2Bucket = B2BucketBox.Text?.Trim() ?? "";
+        p.AzureAccount = AzureAccountBox.Text?.Trim() ?? "";
+        p.AzureKey = AzureKeyBox.Text ?? "";
+        p.AzureContainer = AzureContainerBox.Text?.Trim() ?? "";
+        p.ProtonTwoFactorCode = ProtonTwoFactorBox.Text?.Trim() ?? "";
+        p.ProtonMailboxPassword = ProtonMailboxPasswordBox.Text ?? "";
+        p.ClientId = ClientIdBox.Text?.Trim() ?? "";
+        p.ClientSecret = ClientSecretBox.Text ?? "";
         if (p.Provider == ProviderType.Android) p.DeviceSerial = SelectedDeviceSerial();
         else if (p.Provider == ProviderType.IPhone) p.DeviceSerial = SelectedAppleSerial();
-        p.RemoteRoot = string.IsNullOrWhiteSpace(RootBox.Text) ? "/" : RootBox.Text.Trim();
-        p.DriveLetter = (DriveCombo.SelectedItem as string ?? "Z:").TrimEnd(':');
+        p.RemoteRoot = string.IsNullOrWhiteSpace(RootBox.Text) ? "/" : RootBox.Text!.Trim();
+        if (OperatingSystem.IsWindows())
+            p.DriveLetter = (DriveCombo.SelectedItem as string ?? "Z:").TrimEnd(':');
+        else
+            p.MountPath = MountPathBox.Text?.Trim() ?? "";
         p.Access = AccessCombo.SelectedIndex == 1 ? AccessMode.ReadOnly : AccessMode.ReadWrite;
         if (ForgetHostKeyCheck.IsChecked == true) p.KnownHostKey = "";   // re-trust on next connect
         p.Enabled = EnabledToggle.IsChecked == true;
@@ -517,8 +549,7 @@ public partial class EditDriveWindow : FluentWindow
         p.Color = (ColorCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "#2D7DD2";
     }
 
-    private static void Warn(string msg) =>
-        MessageBox.Show(msg, "ZFTP", MessageBoxButton.OK, MessageBoxImage.Warning);
+    private static Task Warn(string msg) => Dialogs.ShowMessageAsync("ZFTP", msg);
 
-    private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+    private void Cancel_Click(object? sender, RoutedEventArgs e) => Close(false);
 }

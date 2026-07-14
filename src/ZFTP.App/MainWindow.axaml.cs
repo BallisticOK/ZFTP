@@ -8,33 +8,31 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Threading;
-using Microsoft.Win32;
-using Wpf.Ui.Controls;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using Avalonia.Styling;
+using Avalonia.Threading;
+using FluentAvalonia.Styling;
 using ZFTP.Core;
-using Application = System.Windows.Application;
-using MessageBox = System.Windows.MessageBox;
-using MessageBoxButton = System.Windows.MessageBoxButton;
-using MessageBoxResult = System.Windows.MessageBoxResult;
-using MessageBoxImage = System.Windows.MessageBoxImage;
-using Brush = System.Windows.Media.Brush;
-using Brushes = System.Windows.Media.Brushes;
 
 namespace ZFTP.App;
 
-public partial class MainWindow : FluentWindow
+public partial class MainWindow : Window
 {
     private readonly ObservableCollection<ServerItem> _servers = new();
     // Sample 2x/second and average over a short window so bursty transfers
-    // (Windows buffers writes then flushes in bursts) show as a steady rate.
+    // show as a steady rate.
     private readonly DispatcherTimer _speedTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private readonly long[] _readWindow = new long[6];   // 6 * 500ms = 3s window
     private readonly long[] _writeWindow = new long[6];
     private int _windowIdx;
-    private System.Windows.Forms.NotifyIcon? _tray;
+    private TrayIcon? _tray;
     private bool _reallyExit;
     private bool _loadingSettings;
 
@@ -66,15 +64,32 @@ public partial class MainWindow : FluentWindow
         Loaded += async (_, _) => await AutoMountAsync();
 
         // If we should start in the tray, hide ONLY after the first paint — hiding
-        // before the window has rendered leaves a blank/gray surface when it's
-        // later restored from the tray.
+        // before the window has rendered leaves a blank surface when it's later
+        // restored from the tray.
         if (App.StartHidden || _settings.StartMinimized)
-            ContentRendered += HideToTrayOnce;
+            Opened += HideToTrayOnce;
+
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == WindowStateProperty && WindowState == WindowState.Minimized)
+                Hide();   // tuck into the tray instead of showing a taskbar-minimized window
+        };
+        Closing += (_, e) =>
+        {
+            if (!_reallyExit && _settings.MinimizeToTrayOnClose)
+            {
+                // Clicking X hides to tray instead of quitting (drives stay mounted).
+                e.Cancel = true;
+                Hide();
+                return;
+            }
+            if (!_reallyExit) { e.Cancel = true; ExitApp(); }
+        };
     }
 
     private void HideToTrayOnce(object? sender, EventArgs e)
     {
-        ContentRendered -= HideToTrayOnce;
+        Opened -= HideToTrayOnce;
         Hide();
     }
 
@@ -92,10 +107,10 @@ public partial class MainWindow : FluentWindow
     private void SaveProfiles()
     {
         try { ProfileStore.Save(_servers.Select(s => s.Profile)); }
-        catch (Exception ex) { MessageBox.Show("Could not save: " + ex.Message, "ZFTP"); }
+        catch (Exception ex) { _ = Dialogs.ShowMessageAsync("ZFTP", "Could not save: " + ex.Message); }
     }
 
-    private void Save_Click(object sender, RoutedEventArgs e)
+    private void Save_Click(object? sender, RoutedEventArgs e)
     {
         SaveProfiles();
         GlobalStatusText.Text = "Saved.";
@@ -107,15 +122,14 @@ public partial class MainWindow : FluentWindow
 
     // ---- New / Edit / Duplicate / Delete -----------------------------------
 
-    private void New_Click(object sender, RoutedEventArgs e)
+    private async void New_Click(object? sender, RoutedEventArgs e)
     {
-        var profile = new ConnectionProfile
-        {
-            Name = "New Server",
-            DriveLetter = AvailableDriveLetters().LastOrDefault() ?? "Z",
-        };
-        var dlg = new EditDriveWindow(profile, DriveOptions(profile)) { Owner = this };
-        if (dlg.ShowDialog() == true)
+        var profile = new ConnectionProfile { Name = "New Server" };
+        if (OperatingSystem.IsWindows())
+            profile.DriveLetter = AvailableDriveLetters().LastOrDefault() ?? "Z";
+
+        var dlg = new EditDriveWindow(profile, DriveOptions(profile));
+        if (await dlg.ShowDialog<bool>(this))
         {
             var item = new ServerItem(dlg.Result);
             _servers.Add(item);
@@ -124,49 +138,50 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void Edit_Click(object sender, RoutedEventArgs e) => EditSelected();
+    private void Edit_Click(object? sender, RoutedEventArgs e) => _ = EditSelectedAsync();
 
-    private void DrivesGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e) => EditSelected();
+    private void DrivesList_DoubleTapped(object? sender, TappedEventArgs e) => _ = EditSelectedAsync();
 
-    private void EditSelected()
+    private async Task EditSelectedAsync()
     {
         var item = Selected;
         if (item == null) return;
 
         // Edit a copy; only commit if the user saves.
         var working = item.Profile.Clone();
-        var dlg = new EditDriveWindow(working, DriveOptions(item.Profile)) { Owner = this };
-        if (dlg.ShowDialog() == true)
+        var dlg = new EditDriveWindow(working, DriveOptions(item.Profile));
+        if (await dlg.ShowDialog<bool>(this))
         {
             bool wasMounted = item.IsMounted;
             if (wasMounted) item.Session.Unmount();   // settings changed — remount fresh
             item.Profile.CopyFrom(dlg.Result);
             item.RefreshAll();
-            DrivesList.Items.Refresh();
             SaveProfiles();
         }
     }
 
-    private void Duplicate_Click(object sender, RoutedEventArgs e)
+    private void Duplicate_Click(object? sender, RoutedEventArgs e)
     {
         var item = Selected;
         if (item == null) return;
         var copy = item.Profile.Clone();
         copy.Id = Guid.NewGuid().ToString("N");
         copy.Name += " (copy)";
-        copy.DriveLetter = AvailableDriveLetters().LastOrDefault() ?? copy.DriveLetter;
+        if (OperatingSystem.IsWindows())
+            copy.DriveLetter = AvailableDriveLetters().LastOrDefault() ?? copy.DriveLetter;
+        else
+            copy.MountPath = "";   // let it pick its own default under ~/ZFTP/mounts
         var newItem = new ServerItem(copy);
         _servers.Add(newItem);
         DrivesList.SelectedItem = newItem;
         SaveProfiles();
     }
 
-    private void Delete_Click(object sender, RoutedEventArgs e)
+    private async void Delete_Click(object? sender, RoutedEventArgs e)
     {
         var item = Selected;
         if (item == null) return;
-        if (MessageBox.Show($"Delete '{item.Name}'?", "ZFTP",
-                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (!await Dialogs.ShowConfirmAsync("ZFTP", $"Delete '{item.Name}'?")) return;
         if (item.IsMounted) item.Session.Unmount();
         _servers.Remove(item);
         SaveProfiles();
@@ -176,23 +191,22 @@ public partial class MainWindow : FluentWindow
 
     // ---- Connect / Disconnect / Open ---------------------------------------
 
-    private async void Connect_Click(object sender, RoutedEventArgs e)
+    private async void Connect_Click(object? sender, RoutedEventArgs e)
     {
         var item = Selected;
         if (item != null) await MountItemAsync(item);
     }
 
-    private void Disconnect_Click(object sender, RoutedEventArgs e)
+    private void Disconnect_Click(object? sender, RoutedEventArgs e)
     {
         Selected?.Session.Unmount();
-        DrivesList.Items.Refresh();
         RefreshGlobalStatus();
         MaybeStopAdb();
     }
 
     /// <summary>
     /// If no Android drive is mounted anymore, stop the adb background server so
-    /// it isn't left running (and holding tools\adb.exe open) when it's not in use.
+    /// it isn't left running (and holding tools/adb open) when it's not in use.
     /// Runs off the UI thread so kill-server can't stall the window.
     /// </summary>
     private void MaybeStopAdb()
@@ -202,25 +216,24 @@ public partial class MainWindow : FluentWindow
             Task.Run(() => { try { AdbService.KillServer(); } catch { /* ignore */ } });
     }
 
-    private void Open_Click(object sender, RoutedEventArgs e)
+    private void Open_Click(object? sender, RoutedEventArgs e)
     {
         var item = Selected;
-        if (item?.IsMounted == true) OpenInExplorer(item.Session.MountPoint);
+        if (item?.IsMounted == true) OpenInFileManager(item.Session.MountPoint);
     }
 
     // ---- Mount all / Unmount all -------------------------------------------
 
-    private async void MountAll_Click(object sender, RoutedEventArgs e)
+    private async void MountAll_Click(object? sender, RoutedEventArgs e)
     {
         foreach (var item in _servers.Where(s => s.Enabled && !s.IsMounted).ToList())
             await MountItemAsync(item);
     }
 
-    private void UnmountAll_Click(object sender, RoutedEventArgs e)
+    private void UnmountAll_Click(object? sender, RoutedEventArgs e)
     {
         foreach (var item in _servers.Where(s => s.IsMounted).ToList())
             item.Session.Unmount();
-        DrivesList.Items.Refresh();
         RefreshGlobalStatus();
         MaybeStopAdb();
     }
@@ -229,13 +242,16 @@ public partial class MainWindow : FluentWindow
     {
         if (!_settings.AutoMountOnStart) return;   // master switch in Settings
         foreach (var item in _servers.Where(s => s.Enabled && s.Profile.AutoMount && !s.IsMounted).ToList())
+        {
+            if (!OperatingSystem.IsWindows() && item.Profile.Provider is ProviderType.Android or ProviderType.IPhone)
+                continue;   // no adb/AFC mount engine outside Windows yet
             await MountItemAsync(item, interactive: false);
+        }
     }
 
     private async Task MountItemAsync(ServerItem item, bool interactive = true)
     {
         bool ok = await item.Session.MountAsync();
-        DrivesList.Items.Refresh();
         RefreshGlobalStatus();
         if (ok)
         {
@@ -248,19 +264,18 @@ public partial class MainWindow : FluentWindow
             // Only pop a modal dialog for an action the user just took — never
             // during auto-mount/tray startup (a modal there can destabilize the app).
             if (interactive && IsVisible)
-                MessageBox.Show($"Could not mount '{item.Name}':\n{item.Session.LastError}", "ZFTP",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                await Dialogs.ShowMessageAsync("ZFTP", $"Could not mount '{item.Name}':\n{item.Session.LastError}");
         }
     }
 
-    /// <summary>Show a Windows toast/balloon via the tray icon.</summary>
-    private void Notify(string title, string message)
-    {
-        try { _tray?.ShowBalloonTip(4000, title, message, System.Windows.Forms.ToolTipIcon.Info); }
-        catch { /* ignore */ }
-    }
+    /// <summary>
+    /// WPF used a Windows balloon tip here; Avalonia's cross-platform TrayIcon has
+    /// no built-in toast/notification API, so this is a no-op for now — a real,
+    /// known gap versus the old build, not silently dropped.
+    /// </summary>
+    private void Notify(string title, string message) { }
 
-    // ---- live speed + status ----------------------------------------------
+    // ---- live speed + status ------------------------------------------------
 
     private void SpeedTimer_Tick(object? sender, EventArgs e)
     {
@@ -309,7 +324,7 @@ public partial class MainWindow : FluentWindow
     /// <summary>Purge leftover Network-location ghosts from older network-mode builds.</summary>
     private void CleanGhosts() => PlatformIntegration.Current.CleanupGhosts();
 
-    // ---- custom drive icons in Explorer ------------------------------------
+    // ---- custom drive icons in Explorer -------------------------------------
 
     private void SyncDriveIcons()
     {
@@ -321,7 +336,7 @@ public partial class MainWindow : FluentWindow
         PlatformIntegration.Current.RefreshShell();
     }
 
-    // ---- settings tab ------------------------------------------------------
+    // ---- settings tab --------------------------------------------------------
 
     private void LoadSettingsToggles()
     {
@@ -334,7 +349,7 @@ public partial class MainWindow : FluentWindow
         _loadingSettings = false;
     }
 
-    private void StartWithWindows_Toggled(object sender, RoutedEventArgs e)
+    private void StartWithWindows_Toggled(object? sender, RoutedEventArgs e)
     {
         if (_loadingSettings) return;
         bool on = StartWithWindowsToggle.IsChecked == true;
@@ -343,84 +358,102 @@ public partial class MainWindow : FluentWindow
         _settings.Save();
     }
 
-    private void StartMinimized_Toggled(object sender, RoutedEventArgs e)
+    private void StartMinimized_Toggled(object? sender, RoutedEventArgs e)
     {
         if (_loadingSettings) return;
         _settings.StartMinimized = StartMinimizedToggle.IsChecked == true;
         _settings.Save();
     }
 
-    private void TrayOnClose_Toggled(object sender, RoutedEventArgs e)
+    private void TrayOnClose_Toggled(object? sender, RoutedEventArgs e)
     {
         if (_loadingSettings) return;
         _settings.MinimizeToTrayOnClose = TrayOnCloseToggle.IsChecked == true;
         _settings.Save();
     }
 
-    private void AutoMountOnStart_Toggled(object sender, RoutedEventArgs e)
+    private void AutoMountOnStart_Toggled(object? sender, RoutedEventArgs e)
     {
         if (_loadingSettings) return;
         _settings.AutoMountOnStart = AutoMountToggle.IsChecked == true;
         _settings.Save();
     }
 
-    private void Theme_Changed(object sender, SelectionChangedEventArgs e)
+    private void Theme_Changed(object? sender, SelectionChangedEventArgs e)
     {
         if (_loadingSettings) return;
-        var theme = ThemeCombo.SelectedItem as string ?? "Dark";
+        var theme = ThemeCombo.SelectedItem as string ?? "Dark Blue";
         ApplyTheme(theme);
         _settings.Theme = theme;
         _settings.Save();
     }
 
-    // Each theme = a base (Dark/Light) plus an accent colour (R,G,B).
-    private static readonly (string Name, Wpf.Ui.Appearance.ApplicationTheme Base, byte R, byte G, byte B)[] ThemeDefs =
+    // Each theme = a base (dark/light) plus an accent colour (R,G,B).
+    private static readonly (string Name, bool Dark, byte R, byte G, byte B)[] ThemeDefs =
     {
-        ("Dark Blue",        Wpf.Ui.Appearance.ApplicationTheme.Dark,  0x2D, 0x7D, 0xD2),
-        ("Midnight Purple",  Wpf.Ui.Appearance.ApplicationTheme.Dark,  0x8B, 0x5C, 0xF6),
-        ("Forest Green",     Wpf.Ui.Appearance.ApplicationTheme.Dark,  0x22, 0xC5, 0x5E),
-        ("Sunset Orange",    Wpf.Ui.Appearance.ApplicationTheme.Dark,  0xF9, 0x73, 0x16),
-        ("Crimson Red",      Wpf.Ui.Appearance.ApplicationTheme.Dark,  0xEF, 0x44, 0x44),
-        ("Ocean Cyan",       Wpf.Ui.Appearance.ApplicationTheme.Dark,  0x06, 0xB6, 0xD4),
-        ("Rose Pink",        Wpf.Ui.Appearance.ApplicationTheme.Dark,  0xEC, 0x48, 0x99),
-        ("Amber Gold",       Wpf.Ui.Appearance.ApplicationTheme.Dark,  0xF5, 0xB3, 0x00),
-        ("Light Blue",       Wpf.Ui.Appearance.ApplicationTheme.Light, 0x25, 0x63, 0xEB),
-        ("Light Green",      Wpf.Ui.Appearance.ApplicationTheme.Light, 0x16, 0xA3, 0x4A),
+        ("Dark Blue",        true,  0x2D, 0x7D, 0xD2),
+        ("Midnight Purple",  true,  0x8B, 0x5C, 0xF6),
+        ("Forest Green",     true,  0x22, 0xC5, 0x5E),
+        ("Sunset Orange",    true,  0xF9, 0x73, 0x16),
+        ("Crimson Red",      true,  0xEF, 0x44, 0x44),
+        ("Ocean Cyan",       true,  0x06, 0xB6, 0xD4),
+        ("Rose Pink",        true,  0xEC, 0x48, 0x99),
+        ("Amber Gold",       true,  0xF5, 0xB3, 0x00),
+        ("Light Blue",       false, 0x25, 0x63, 0xEB),
+        ("Light Green",      false, 0x16, 0xA3, 0x4A),
     };
 
     private static void ApplyTheme(string name)
     {
         var def = ThemeDefs.FirstOrDefault(t => t.Name == name);
         if (def.Name == null) def = ThemeDefs[0];
-        var accent = System.Windows.Media.Color.FromRgb(def.R, def.G, def.B);
-        // Apply the base theme WITHOUT resetting the accent, then set our accent.
-        Wpf.Ui.Appearance.ApplicationThemeManager.Apply(def.Base, Wpf.Ui.Controls.WindowBackdropType.Mica, updateAccent: false);
-        Wpf.Ui.Appearance.ApplicationAccentColorManager.Apply(accent, def.Base);
+        var accent = Color.FromRgb(def.R, def.G, def.B);
+
+        if (Application.Current is not { } app) return;
+        app.RequestedThemeVariant = def.Dark ? ThemeVariant.Dark : ThemeVariant.Light;
+        var faTheme = app.Styles.OfType<FluentAvaloniaTheme>().FirstOrDefault();
+        if (faTheme != null) faTheme.CustomAccentColor = accent;
     }
 
-    // ---- system tray -------------------------------------------------------
+    // ---- system tray ---------------------------------------------------------
 
     private void SetupTray()
     {
-        _tray = new System.Windows.Forms.NotifyIcon
+        _tray = new TrayIcon
         {
-            Icon = LoadAppIcon(),
-            Visible = true,
-            Text = "ZFTP",
+            Icon = LoadTrayIcon(),
+            IsVisible = true,
+            ToolTipText = "ZFTP",
         };
-        _tray.DoubleClick += (_, _) => ShowFromTray();
+        _tray.Clicked += (_, _) => ShowFromTray();
 
-        var menu = new System.Windows.Forms.ContextMenuStrip();
-        menu.Items.Add("Open ZFTP", null, (_, _) => ShowFromTray());
-        menu.Items.Add("Mount all", null, async (_, _) => { ShowFromTray(); await AutoMountAllEnabled(); });
-        menu.Items.Add("Exit", null, (_, _) => ExitApp());
-        _tray.ContextMenuStrip = menu;
+        var menu = new NativeMenu();
+        var open = new NativeMenuItem("Open ZFTP");
+        open.Click += (_, _) => ShowFromTray();
+        var mountAll = new NativeMenuItem("Mount all");
+        mountAll.Click += async (_, _) => { ShowFromTray(); await AutoMountAllEnabled(); };
+        var exit = new NativeMenuItem("Exit");
+        exit.Click += (_, _) => ExitApp();
+        menu.Add(open);
+        menu.Add(mountAll);
+        menu.Add(exit);
+        _tray.Menu = menu;
+
+        TrayIcon.SetIcons(Application.Current!, new TrayIcons { _tray });
+    }
+
+    private static WindowIcon LoadTrayIcon()
+    {
+        // Authority must be the actual assembly name (AssemblyName=ZFTP in the
+        // csproj), not the project/namespace name ZFTP.App.
+        using var stream = AssetLoader.Open(new Uri("avares://ZFTP/Assets/logo.png"));
+        return new WindowIcon(new Bitmap(stream));
     }
 
     private static string CurrentVersion =>
-        System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0";
+        typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
 
-    private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
+    private async void CheckUpdate_Click(object? sender, RoutedEventArgs e)
     {
         CheckUpdateButton.IsEnabled = false;
         UpdateStatusText.Text = "Checking…";
@@ -440,17 +473,33 @@ public partial class MainWindow : FluentWindow
 
             case UpdateCheckStatus.UpdateAvailable:
                 var info = result.Info!;
-                var ask = MessageBox.Show(
-                    $"ZFTP {info.Version} is available (you have {CurrentVersion}) — from {info.Source}.\n\n{info.Notes}\n\nDownload and install it now?",
-                    "Update available", MessageBoxButton.YesNo, MessageBoxImage.Information);
-                if (ask == MessageBoxResult.Yes)
+                if (string.IsNullOrEmpty(info.Url))
+                {
+                    // A release exists but nothing is published for this OS yet
+                    // (true for Linux/macOS today - CI only publishes a Windows
+                    // installer). Say so plainly rather than assuming an
+                    // installer exists.
+                    UpdateStatusText.Text = $"ZFTP {info.Version} is available, but no build is published for this OS yet. Check github.com/BallisticOK/ZFTP/releases.";
+                    break;
+                }
+
+                var ask = await Dialogs.ShowConfirmAsync("Update available",
+                    $"ZFTP {info.Version} is available (you have {CurrentVersion}) — from {info.Source}.\n\n{info.Notes}\n\nDownload and install it now?");
+                if (ask)
                 {
                     UpdateStatusText.Text = "Downloading update…";
                     var path = await Updater.DownloadInstallerAsync(info.Url);
                     if (path != null)
                     {
-                        Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
-                        ExitApp();   // close ZFTP so the installer can replace it
+                        if (OperatingSystem.IsWindows())
+                        {
+                            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+                            ExitApp();   // close ZFTP so the installer can replace it
+                        }
+                        else
+                        {
+                            UpdateStatusText.Text = $"Downloaded to {path}. Quit ZFTP, replace the running copy, and relaunch it.";
+                        }
                     }
                     else
                     {
@@ -459,21 +508,6 @@ public partial class MainWindow : FluentWindow
                 }
                 break;
         }
-    }
-
-    private static System.Drawing.Icon LoadAppIcon()
-    {
-        try
-        {
-            var exe = Process.GetCurrentProcess().MainModule?.FileName;
-            if (!string.IsNullOrEmpty(exe))
-            {
-                var ico = System.Drawing.Icon.ExtractAssociatedIcon(exe);
-                if (ico != null) return ico;
-            }
-        }
-        catch { /* fall back below */ }
-        return System.Drawing.SystemIcons.Application;
     }
 
     private async Task AutoMountAllEnabled()
@@ -486,7 +520,7 @@ public partial class MainWindow : FluentWindow
     {
         if (_tray == null) return;
         int mounted = _servers.Count(s => s.IsMounted);
-        _tray.Text = mounted > 0 ? $"ZFTP — {mounted} mounted" : "ZFTP";
+        _tray.ToolTipText = mounted > 0 ? $"ZFTP — {mounted} mounted" : "ZFTP";
     }
 
     private void ShowFromTray()
@@ -496,32 +530,12 @@ public partial class MainWindow : FluentWindow
         Activate();
     }
 
-    protected override void OnStateChanged(EventArgs e)
-    {
-        base.OnStateChanged(e);
-        if (WindowState == WindowState.Minimized) Hide(); // tuck into the tray
-    }
-
-    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
-    {
-        if (!_reallyExit && _settings.MinimizeToTrayOnClose)
-        {
-            // Clicking X hides to tray instead of quitting (drives stay mounted).
-            e.Cancel = true;
-            Hide();
-            return;
-        }
-        // Otherwise fully exit: unmount everything and remove the tray icon.
-        if (!_reallyExit) { e.Cancel = true; ExitApp(); return; }
-        base.OnClosing(e);
-    }
-
     private void ExitApp()
     {
         _reallyExit = true;
         foreach (var item in _servers.Where(s => s.IsMounted).ToList())
             item.Session.Unmount();
-        // Stop the adb background server so it stops holding tools\adb.exe open
+        // Stop the adb background server so it stops holding tools/adb open
         // (otherwise an update can't replace it). No-op if adb was never used.
         try { AdbService.KillServer(); } catch { /* ignore */ }
         SaveProfiles();
@@ -529,15 +543,18 @@ public partial class MainWindow : FluentWindow
         foreach (var s in _servers) PlatformIntegration.Current.OnDriveUnmounted(s.Profile);
         PlatformIntegration.Current.RefreshShell();
         CleanGhosts();
-        if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
-        Application.Current.Shutdown();
+        if (_tray != null) _tray.IsVisible = false;
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            desktop.Shutdown();
     }
 
-    // ---- helpers -----------------------------------------------------------
+    // ---- helpers ---------------------------------------------------------------
 
-    /// <summary>Free drive letters, plus the profile's own letter so it stays selectable.</summary>
+    /// <summary>Free drive letters, plus the profile's own letter so it stays selectable.
+    /// Windows only - see EditDriveWindow for the Linux/macOS mount-path equivalent.</summary>
     private IEnumerable<string> DriveOptions(ConnectionProfile p)
     {
+        if (!OperatingSystem.IsWindows()) return Array.Empty<string>();
         var letters = AvailableDriveLetters().ToList();
         var own = p.DriveLetter.TrimEnd(':');
         if (!letters.Contains(own)) letters.Insert(0, own);
@@ -572,9 +589,17 @@ public partial class MainWindow : FluentWindow
         return u == 0 ? $"{(long)v} {units[u]}" : $"{v:0.0} {units[u]}";
     }
 
-    private static void OpenInExplorer(string mountPoint)
+    private static void OpenInFileManager(string mountPoint)
     {
-        try { Process.Start(new ProcessStartInfo(mountPoint + "\\") { UseShellExecute = true }); }
+        try
+        {
+            if (OperatingSystem.IsWindows())
+                Process.Start(new ProcessStartInfo(mountPoint + "\\") { UseShellExecute = true });
+            else if (OperatingSystem.IsMacOS())
+                Process.Start(new ProcessStartInfo("open", mountPoint));
+            else
+                Process.Start(new ProcessStartInfo("xdg-open", mountPoint));
+        }
         catch { /* ignore */ }
     }
 }

@@ -10,6 +10,7 @@
 
 # Installer build output
 installer/Output/
+/dist/
 
 # Untracked local rclone download (not part of the build - see readme)
 /rclone-v*-windows-*/
