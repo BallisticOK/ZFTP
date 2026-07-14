@@ -75,11 +75,16 @@ jobs:
       - name: Install WinFsp
         shell: pwsh
         run: |
-          # Invoke msiexec directly (not via Start-Process -PassThru, whose
-          # returned process object doesn't reliably surface ExitCode) so
-          # $LASTEXITCODE is populated correctly.
-          msiexec.exe /i "prereqs\winfsp.msi" /quiet /qn /norestart
-          if ($LASTEXITCODE -ne 0) { throw "WinFsp install failed with exit code $LASTEXITCODE" }
+          # A single quoted argument string (not a comma-separated -ArgumentList
+          # array) is the reliable form for Start-Process+msiexec. Verbose
+          # logging so a failure here is diagnosable instead of a bare exit code.
+          $msiLog = "prereqs\winfsp-install.log"
+          $proc = Start-Process msiexec.exe -ArgumentList "/i `"prereqs\winfsp.msi`" /quiet /qn /norestart /l*v `"$msiLog`"" -Wait -PassThru
+          Write-Output "msiexec exit code: $($proc.ExitCode)"
+          if ($proc.ExitCode -ne 0) {
+            if (Test-Path $msiLog) { Get-Content $msiLog -Tail 40 }
+            throw "WinFsp install failed with exit code $($proc.ExitCode)"
+          }
 
       - name: Restore
         run: dotnet restore ZFTP.sln

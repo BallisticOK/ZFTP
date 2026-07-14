@@ -28,12 +28,18 @@ jobs:
           $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/winfsp/winfsp/releases/latest" -Headers $headers
           $asset = $rel.assets | Where-Object { $_.name -match '^winfsp-.*\.msi$' } | Select-Object -First 1
           if (-not $asset) { throw "Could not find a WinFsp .msi asset in the latest release." }
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "$env:RUNNER_TEMP\winfsp.msi"
-          # Invoke msiexec directly (not via Start-Process -PassThru, whose
-          # returned process object doesn't reliably surface ExitCode) so
-          # $LASTEXITCODE is populated correctly.
-          msiexec.exe /i "$env:RUNNER_TEMP\winfsp.msi" /quiet /qn /norestart
-          if ($LASTEXITCODE -ne 0) { throw "WinFsp install failed with exit code $LASTEXITCODE" }
+          $msi = "$env:RUNNER_TEMP\winfsp.msi"
+          $msiLog = "$env:RUNNER_TEMP\winfsp-install.log"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $msi
+          # A single quoted argument string (not a comma-separated -ArgumentList
+          # array) is the reliable form for Start-Process+msiexec. Verbose
+          # logging so a failure here is diagnosable instead of a bare exit code.
+          $proc = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /quiet /qn /norestart /l*v `"$msiLog`"" -Wait -PassThru
+          Write-Output "msiexec exit code: $($proc.ExitCode)"
+          if ($proc.ExitCode -ne 0) {
+            if (Test-Path $msiLog) { Get-Content $msiLog -Tail 40 }
+            throw "WinFsp install failed with exit code $($proc.ExitCode)"
+          }
       - run: dotnet restore ZFTP.sln
       - run: dotnet build ZFTP.sln -c Debug --no-restore
 
