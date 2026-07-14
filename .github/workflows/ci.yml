@@ -29,8 +29,11 @@ jobs:
           $asset = $rel.assets | Where-Object { $_.name -match '^winfsp-.*\.msi$' } | Select-Object -First 1
           if (-not $asset) { throw "Could not find a WinFsp .msi asset in the latest release." }
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "$env:RUNNER_TEMP\winfsp.msi"
-          Start-Process msiexec.exe -ArgumentList "/i", "$env:RUNNER_TEMP\winfsp.msi", "/quiet", "/qn", "/norestart" -Wait -PassThru |
-            ForEach-Object { if ($_.ExitCode -ne 0) { throw "WinFsp install failed with exit code $($_.ExitCode)" } }
+          # Invoke msiexec directly (not via Start-Process -PassThru, whose
+          # returned process object doesn't reliably surface ExitCode) so
+          # $LASTEXITCODE is populated correctly.
+          msiexec.exe /i "$env:RUNNER_TEMP\winfsp.msi" /quiet /qn /norestart
+          if ($LASTEXITCODE -ne 0) { throw "WinFsp install failed with exit code $LASTEXITCODE" }
       - run: dotnet restore ZFTP.sln
       - run: dotnet build ZFTP.sln -c Debug --no-restore
 

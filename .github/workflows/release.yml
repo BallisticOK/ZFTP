@@ -75,8 +75,11 @@ jobs:
       - name: Install WinFsp
         shell: pwsh
         run: |
-          Start-Process msiexec.exe -ArgumentList "/i", "prereqs\winfsp.msi", "/quiet", "/qn", "/norestart" -Wait -PassThru |
-            ForEach-Object { if ($_.ExitCode -ne 0) { throw "WinFsp install failed with exit code $($_.ExitCode)" } }
+          # Invoke msiexec directly (not via Start-Process -PassThru, whose
+          # returned process object doesn't reliably surface ExitCode) so
+          # $LASTEXITCODE is populated correctly.
+          msiexec.exe /i "prereqs\winfsp.msi" /quiet /qn /norestart
+          if ($LASTEXITCODE -ne 0) { throw "WinFsp install failed with exit code $LASTEXITCODE" }
 
       - name: Restore
         run: dotnet restore ZFTP.sln
