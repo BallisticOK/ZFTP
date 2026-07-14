@@ -179,8 +179,13 @@ jobs:
     # Runs after the Windows job so the GitHub Release already exists - this
     # job just adds Linux assets to it. A tarball (always works) plus an
     # AppImage (needs an actual Linux host to run appimagetool - not possible
-    # from a Windows machine, which is exactly why this lives in CI).
+    # from a Windows machine, which is exactly why this lives in CI). arm64 is
+    # cross-compiled from the same x64 runner (framework-dependent publish
+    # needs no arm64 hardware to build, only to run).
     needs: build-and-release
+    strategy:
+      matrix:
+        rid: [linux-x64, linux-arm64]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -192,10 +197,10 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Build tarball
-        run: installer/linux/build-tarball.sh "${{ needs.build-and-release.outputs.version }}"
+        run: installer/linux/build-tarball.sh "${{ needs.build-and-release.outputs.version }}" "${{ matrix.rid }}"
 
       - name: Build AppImage
-        run: installer/linux/build-appimage.sh "${{ needs.build-and-release.outputs.version }}"
+        run: installer/linux/build-appimage.sh "${{ needs.build-and-release.outputs.version }}" "${{ matrix.rid }}"
 
       - name: Upload Linux assets to the release
         uses: softprops/action-gh-release@v2
@@ -204,5 +209,6 @@ jobs:
         with:
           tag_name: ${{ needs.build-and-release.outputs.tag_name }}
           files: |
-            dist/ZFTP-*-linux-x64.tar.gz
+            dist/ZFTP-*-linux-*.tar.gz
             dist/ZFTP-*-x86_64.AppImage
+            dist/ZFTP-*-aarch64.AppImage

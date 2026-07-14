@@ -56,6 +56,14 @@ jobs:
         run: dotnet publish src/ZFTP.Daemon/ZFTP.Daemon.csproj -f net8.0 -r linux-x64 --self-contained false
       - name: Publish ZFTP.App (linux-x64)
         run: dotnet publish src/ZFTP.App/ZFTP.App.csproj -f net8.0 -r linux-x64 --self-contained false
+      # Cross-compiled (framework-dependent publish needs no arm64 hardware to
+      # build, just to run) - same approach already used for osx-arm64 below.
+      - name: Publish ZFTP.Core (linux-arm64)
+        run: dotnet publish src/ZFTP.Core/ZFTP.Core.csproj -f net8.0 -r linux-arm64 --self-contained false
+      - name: Publish ZFTP.Daemon (linux-arm64)
+        run: dotnet publish src/ZFTP.Daemon/ZFTP.Daemon.csproj -f net8.0 -r linux-arm64 --self-contained false
+      - name: Publish ZFTP.App (linux-arm64)
+        run: dotnet publish src/ZFTP.App/ZFTP.App.csproj -f net8.0 -r linux-arm64 --self-contained false
 
   macos-build:
     runs-on: macos-latest

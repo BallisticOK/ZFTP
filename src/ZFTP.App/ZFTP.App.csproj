@@ -11,7 +11,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Ship the app as ZFTP.exe (cleaner than ZFTP.App.exe). -->
     <AssemblyName>ZFTP</AssemblyName>
-    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>win-x64;linux-x64;linux-arm64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <SelfContained>false</SelfContained>
     <DefineConstants Condition="'$(TargetFramework)'=='net8.0-windows'">$(DefineConstants);WINDOWS</DefineConstants>
     <Version>2.6.1</Version>
