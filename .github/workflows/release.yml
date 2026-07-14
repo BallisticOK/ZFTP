@@ -22,7 +22,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0 # full history, needed to diff against the previous tag
           fetch-tags: true
@@ -49,9 +49,29 @@ jobs:
           "assembly_version=$assemblyVersion" >> $env:GITHUB_OUTPUT
 
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "8.0.x"
+
+      - name: Download WinFsp installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path prereqs | Out-Null
+          $headers = @{ "User-Agent" = "ZFTP-CI" }
+          if ($env:GITHUB_TOKEN) { $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN" }
+          $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/winfsp/winfsp/releases/latest" -Headers $headers
+          $asset = $rel.assets | Where-Object { $_.name -match '^winfsp-.*\.msi$' } | Select-Object -First 1
+          if (-not $asset) { throw "Could not find a WinFsp .msi asset in the latest release." }
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "prereqs\winfsp.msi"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install WinFsp
+        shell: pwsh
+        run: |
+          # Needed so ZFTP.Core's HintPath reference to winfsp-msil.dll resolves during build.
+          $proc = Start-Process msiexec.exe -ArgumentList "/i", "$($pwd)\prereqs\winfsp.msi", "/quiet", "/qn", "/norestart" -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "WinFsp install failed with exit code $($proc.ExitCode)" }
 
       - name: Restore
         run: dotnet restore ZFTP.sln
@@ -71,19 +91,6 @@ jobs:
           -p:Version=${{ steps.version.outputs.assembly_version }}
           -p:AssemblyVersion=${{ steps.version.outputs.assembly_version }}
           -p:FileVersion=${{ steps.version.outputs.assembly_version }}
-
-      - name: Download WinFsp installer
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path prereqs | Out-Null
-          $headers = @{ "User-Agent" = "ZFTP-CI" }
-          if ($env:GITHUB_TOKEN) { $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN" }
-          $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/winfsp/winfsp/releases/latest" -Headers $headers
-          $asset = $rel.assets | Where-Object { $_.name -match '^winfsp-.*\.msi$' } | Select-Object -First 1
-          if (-not $asset) { throw "Could not find a WinFsp .msi asset in the latest release." }
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "prereqs\winfsp.msi"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download .NET 8 Desktop Runtime installer
         shell: pwsh
