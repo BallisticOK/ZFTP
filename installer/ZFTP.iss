@@ -6,16 +6,33 @@
 ;  uninstaller. No source code — just the compiled program.
 ; ============================================================================
 
+; Every value below can be overridden from the command line with
+; `iscc /DName=value ZFTP.iss` (used by the GitHub Actions release workflow)
+; without touching this file - the #ifndef guards mean a /D define wins, and
+; the maintainer's own local absolute paths stay the default otherwise.
 #define MyAppName "ZFTP"
-#define MyAppVersion "2.6.1"
+#ifndef MyAppVersion
+  #define MyAppVersion "2.6.1"
+#endif
 #define MyAppPublisher "ZFTP"
 #define MyAppExeName "ZFTP.exe"
 #define MyUpdaterExe "ZFTP.Updater.exe"
 
-#define PublishDir "E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish"
-#define IconFile   "E:\SFTP Net Drive\ZFTP\src\ZFTP.App\zftp.ico"
-#define WinFspMsi  "E:\SFTP Net Drive\_setup\winfsp-2.1.25156.msi"
-#define DotNetExe  "E:\SFTP Net Drive\_setup\windowsdesktop-runtime-8-x64.exe"
+#ifndef PublishDir
+  #define PublishDir "E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish"
+#endif
+#ifndef IconFile
+  #define IconFile "E:\SFTP Net Drive\ZFTP\src\ZFTP.App\zftp.ico"
+#endif
+#ifndef WinFspMsi
+  #define WinFspMsi "E:\SFTP Net Drive\_setup\winfsp-2.1.25156.msi"
+#endif
+#ifndef DotNetExe
+  #define DotNetExe "E:\SFTP Net Drive\_setup\windowsdesktop-runtime-8-x64.exe"
+#endif
+#ifndef MyOutputDir
+  #define MyOutputDir "E:\SFTP Net Drive\ZFTP\dist"
+#endif
 
 [Setup]
 AppId={{B7E1F3A2-9C4D-4E6F-8A1B-2C3D4E5F6071}
@@ -25,7 +42,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-OutputDir=E:\SFTP Net Drive\ZFTP\dist
+OutputDir={#MyOutputDir}
 OutputBaseFilename=ZFTP-Setup-{#MyAppVersion}
 SetupIconFile={#IconFile}
 UninstallDisplayIcon={app}\{#MyAppExeName}

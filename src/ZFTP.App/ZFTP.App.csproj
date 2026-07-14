@@ -12,6 +12,13 @@
     <AssemblyName>ZFTP</AssemblyName>
     <PlatformTarget>x64</PlatformTarget>
     <Platforms>x64</Platforms>
+    <!-- Pins asset selection to Windows so NuGet packages that ship native
+         binaries for every OS (like iMobileDevice-net) only ever copy the
+         win-x64 ones into our output - without this, a plain `dotnet build`
+         has no RID to select by and copies ALL of them, including macOS/Linux
+         binaries this Windows-only app can never load. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>zftp.ico</ApplicationIcon>
     <Version>2.6.1</Version>
@@ -55,5 +62,23 @@
       <Link>tools\AdbWinUsbApi.dll</Link>
     </None>
   </ItemGroup>
+
+  <!-- iMobileDevice-net bundles the FULL libimobiledevice command-line toolset,
+       including device-recovery/DFU-mode tools (idevicerestore, irecovery) that
+       ZFTP never uses - our Apple support only does AFC file access (Photos /
+       File Sharing apps), never device restore. These specific tools are also
+       what trips antivirus heuristics (their whole job is talking to a phone's
+       bootloader, the same thing jailbreak/exploit tools do), so drop them from
+       the shipped app rather than carry files we don't need and that just
+       generate false-positive scares for users and contributors. -->
+  <Target Name="RemoveUnusedRecoveryTools" AfterTargets="ResolveReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)"
+        Condition="'%(Filename)%(Extension)' == 'idevicerestore.exe'
+                or '%(Filename)%(Extension)' == 'ideviceenterrecovery.exe'
+                or '%(Filename)%(Extension)' == 'irecovery.exe'
+                or '%(Filename)%(Extension)' == 'irecovery.dll'" />
+    </ItemGroup>
+  </Target>
 
 </Project>

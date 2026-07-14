@@ -224,9 +224,15 @@ public sealed class MountSession : IDisposable
 
             var devices = AdbService.ListDeviceSerials();
             if (devices.Length == 0)
-                throw new InvalidOperationException(
+            {
+                // adb might actually see the phone but not in a "ready" state (still
+                // waiting on the Allow prompt, offline, or blocked by Windows) - say so
+                // instead of the generic "not detected" message, which sends people
+                // down the wrong troubleshooting path.
+                throw new InvalidOperationException(AdbService.ExplainNoReadyDevice() ??
                     "No Android device detected. Connect your phone via USB, turn on " +
                     "\"USB debugging\" in Developer options, and tap \"Allow\" on the phone.");
+            }
 
             var saved = Profile.DeviceSerial?.Trim() ?? "";
             string serial;
