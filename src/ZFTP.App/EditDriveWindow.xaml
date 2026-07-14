@@ -30,6 +30,11 @@
                     <ComboBoxItem Content="Dropbox" />
                     <ComboBoxItem Content="OneDrive" />
                     <ComboBoxItem Content="Box" />
+                    <ComboBoxItem Content="SMB / Windows network share" />
+                    <ComboBoxItem Content="Backblaze B2" />
+                    <ComboBoxItem Content="Microsoft Azure Blob Storage" />
+                    <ComboBoxItem Content="Mega.nz" />
+                    <ComboBoxItem Content="Proton Drive" />
                     <ComboBoxItem Content="Android device (USB)" />
                     <ComboBoxItem Content="iPhone / iPad (USB) - limited" />
                 </ComboBox>
@@ -123,6 +128,42 @@
                     </Grid>
                 </StackPanel>
 
+                <!-- SMB share + domain -->
+                <StackPanel x:Name="SmbPanel" Visibility="Collapsed">
+                    <TextBlock Text="Share name" Margin="0,0,0,4" />
+                    <ui:TextBox x:Name="SmbShareBox" PlaceholderText="Public" Margin="0,0,0,14" />
+                    <TextBlock Text="Domain / workgroup (optional)" Margin="0,0,0,4" />
+                    <ui:TextBox x:Name="SmbDomainBox" Margin="0,0,0,14" />
+                </StackPanel>
+
+                <!-- Backblaze B2 -->
+                <StackPanel x:Name="B2Panel" Visibility="Collapsed">
+                    <TextBlock Text="Application Key ID" Margin="0,0,0,4" />
+                    <ui:TextBox x:Name="B2AccountBox" Margin="0,0,0,14" />
+                    <TextBlock Text="Application Key" Margin="0,0,0,4" />
+                    <ui:PasswordBox x:Name="B2KeyBox" Margin="0,0,0,14" />
+                    <TextBlock Text="Bucket" Margin="0,0,0,4" />
+                    <ui:TextBox x:Name="B2BucketBox" Margin="0,0,0,14" />
+                </StackPanel>
+
+                <!-- Microsoft Azure Blob Storage -->
+                <StackPanel x:Name="AzurePanel" Visibility="Collapsed">
+                    <TextBlock Text="Storage account name" Margin="0,0,0,4" />
+                    <ui:TextBox x:Name="AzureAccountBox" Margin="0,0,0,14" />
+                    <TextBlock Text="Account key" Margin="0,0,0,4" />
+                    <ui:PasswordBox x:Name="AzureKeyBox" Margin="0,0,0,14" />
+                    <TextBlock Text="Container" Margin="0,0,0,4" />
+                    <ui:TextBox x:Name="AzureContainerBox" Margin="0,0,0,14" />
+                </StackPanel>
+
+                <!-- Proton Drive -->
+                <StackPanel x:Name="ProtonPanel" Visibility="Collapsed">
+                    <TextBlock Text="2FA code (only needed once, if enabled)" Margin="0,0,0,4" />
+                    <ui:TextBox x:Name="ProtonTwoFactorBox" PlaceholderText="123456" Margin="0,0,0,14" />
+                    <TextBlock Text="Mailbox password (only for two-password accounts)" Margin="0,0,0,4" />
+                    <ui:PasswordBox x:Name="ProtonMailboxPasswordBox" Margin="0,0,0,14" />
+                </StackPanel>
+
                 <!-- OAuth cloud drives -->
                 <StackPanel x:Name="OAuthPanel" Visibility="Collapsed">
                     <ui:Card Padding="14" Margin="0,0,0,10">
@@ -132,6 +173,20 @@
                                        Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10" />
                             <ui:Button x:Name="SignInButton" Content="Sign in with browser"
                                        Icon="{ui:SymbolIcon Globe24}" Click="SignIn_Click" />
+                        </StackPanel>
+                    </ui:Card>
+
+                    <!-- OneDrive only: Microsoft can offer more than one "drive" for a
+                         single account (including hidden system ones) - shown once sign-in
+                         finds them, so the user picks the real one instead of it guessing. -->
+                    <ui:Card x:Name="OnedriveDriveCard" Padding="14" Margin="0,0,0,10" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock Text="Which OneDrive is this?" FontWeight="SemiBold" Margin="0,0,0,6" />
+                            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,10"
+                                       Text="Microsoft accounts can have more than one of these, including hidden system ones. If you're not sure, the plain 'OneDrive' entry is usually right." />
+                            <ComboBox x:Name="OnedriveDriveCombo" Margin="0,0,0,10" />
+                            <ui:Button x:Name="OnedriveChooseButton" Content="Use this drive"
+                                       Appearance="Primary" Click="OnedriveChoose_Click" />
                         </StackPanel>
                     </ui:Card>
 
@@ -155,8 +210,10 @@
                                        FontWeight="SemiBold" Margin="0,0,0,6" TextWrapping="Wrap" />
                             <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4"
                                        Text="Settings - About phone - tap Build number 7 times to unlock Developer options, then Settings - System - Developer options - turn on USB debugging. Plug in the cable and tap Allow on the phone." />
-                            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4"
                                        Text="No app is installed on the phone and root is not required. The drive shows your shared storage (default /sdcard)." />
+                            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                                       Text="Still nothing after that? Open Device Manager - if the phone shows up under 'Other devices' with a warning icon, Windows is missing its ADB driver; install the phone maker's USB driver (or Google's 'Android USB Driver') and click Refresh." />
                         </StackPanel>
                     </ui:Card>
 

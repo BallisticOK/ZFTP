@@ -26,7 +26,9 @@ public partial class EditDriveWindow : FluentWindow
     {
         ProviderType.Sftp, ProviderType.Ftp, ProviderType.Ftps, ProviderType.WebDav,
         ProviderType.S3, ProviderType.GoogleDrive, ProviderType.Dropbox,
-        ProviderType.OneDrive, ProviderType.Box, ProviderType.Android, ProviderType.IPhone,
+        ProviderType.OneDrive, ProviderType.Box,
+        ProviderType.Smb, ProviderType.B2, ProviderType.Azure, ProviderType.Mega, ProviderType.Proton,
+        ProviderType.Android, ProviderType.IPhone,
     };
 
     private static readonly (string Name, string Hex)[] Colors =
@@ -84,6 +86,16 @@ public partial class EditDriveWindow : FluentWindow
         S3BucketBox.Text = p.S3Bucket;
         S3RegionBox.Text = p.S3Region;
         S3EndpointBox.Text = p.S3Endpoint;
+        SmbShareBox.Text = p.SmbShare;
+        SmbDomainBox.Text = p.SmbDomain;
+        B2AccountBox.Text = p.B2AccountId;
+        B2KeyBox.Password = p.B2ApplicationKey;
+        B2BucketBox.Text = p.B2Bucket;
+        AzureAccountBox.Text = p.AzureAccount;
+        AzureKeyBox.Password = p.AzureKey;
+        AzureContainerBox.Text = p.AzureContainer;
+        ProtonTwoFactorBox.Text = p.ProtonTwoFactorCode;
+        ProtonMailboxPasswordBox.Password = p.ProtonMailboxPassword;
         ClientIdBox.Text = p.ClientId;
         ClientSecretBox.Password = p.ClientSecret;
         RootBox.Text = string.IsNullOrEmpty(p.RemoteRoot) ? "/" : p.RemoteRoot;
@@ -110,10 +122,12 @@ public partial class EditDriveWindow : FluentWindow
         if (PortBox == null) return; // during init
         var pt = SelectedProvider();
         // sensible default port when switching protocol
-        if (pt is ProviderType.Ftp or ProviderType.Ftps && (PortBox.Text == "22" || string.IsNullOrWhiteSpace(PortBox.Text)))
+        if (pt is ProviderType.Ftp or ProviderType.Ftps && (PortBox.Text == "22" || PortBox.Text == "445" || string.IsNullOrWhiteSpace(PortBox.Text)))
             PortBox.Text = "21";
-        else if (pt == ProviderType.Sftp && (PortBox.Text == "21" || string.IsNullOrWhiteSpace(PortBox.Text)))
+        else if (pt == ProviderType.Sftp && (PortBox.Text == "21" || PortBox.Text == "445" || string.IsNullOrWhiteSpace(PortBox.Text)))
             PortBox.Text = "22";
+        else if (pt == ProviderType.Smb && (PortBox.Text == "21" || PortBox.Text == "22" || string.IsNullOrWhiteSpace(PortBox.Text)))
+            PortBox.Text = "445";
 
         // Android shared storage lives under /sdcard; iPhone's AFC root is "/".
         if (RootBox != null && pt == ProviderType.Android &&
@@ -134,18 +148,28 @@ public partial class EditDriveWindow : FluentWindow
         bool ftpish = pt is ProviderType.Ftp or ProviderType.Ftps;
         bool webdav = pt == ProviderType.WebDav;
         bool s3 = pt == ProviderType.S3;
+        bool smb = pt == ProviderType.Smb;
+        bool b2 = pt == ProviderType.B2;
+        bool azure = pt == ProviderType.Azure;
+        bool mega = pt == ProviderType.Mega;
+        bool proton = pt == ProviderType.Proton;
         bool oauth = RcloneService.RequiresOAuth(pt);
         bool android = pt == ProviderType.Android;
         bool apple = pt == ProviderType.IPhone;
 
-        HostPanel.Visibility = (sftp || ftpish) ? Visibility.Visible : Visibility.Collapsed;
+        HostPanel.Visibility = (sftp || ftpish || smb) ? Visibility.Visible : Visibility.Collapsed;
         UrlPanel.Visibility = webdav ? Visibility.Visible : Visibility.Collapsed;
-        UserPanel.Visibility = (sftp || ftpish || webdav) ? Visibility.Visible : Visibility.Collapsed;
+        UserPanel.Visibility = (sftp || ftpish || webdav || smb || mega || proton) ? Visibility.Visible : Visibility.Collapsed;
         AuthPanel.Visibility = sftp ? Visibility.Visible : Visibility.Collapsed;
         S3Panel.Visibility = s3 ? Visibility.Visible : Visibility.Collapsed;
+        SmbPanel.Visibility = smb ? Visibility.Visible : Visibility.Collapsed;
+        B2Panel.Visibility = b2 ? Visibility.Visible : Visibility.Collapsed;
+        AzurePanel.Visibility = azure ? Visibility.Visible : Visibility.Collapsed;
+        ProtonPanel.Visibility = proton ? Visibility.Visible : Visibility.Collapsed;
         OAuthPanel.Visibility = oauth ? Visibility.Visible : Visibility.Collapsed;
         AndroidPanel.Visibility = android ? Visibility.Visible : Visibility.Collapsed;
         ApplePanel.Visibility = apple ? Visibility.Visible : Visibility.Collapsed;
+        if (pt != ProviderType.OneDrive) { OnedriveDriveCard.Visibility = Visibility.Collapsed; _onedriveResumeState = null; }
         if (oauth) UpdateOAuthStatus();
         if (android) LoadDevices(Result.DeviceSerial);
         if (apple) LoadAppleDevices(Result.DeviceSerial);
@@ -155,7 +179,7 @@ public partial class EditDriveWindow : FluentWindow
         else
         {
             KeyPanel.Visibility = Visibility.Collapsed;
-            PasswordPanel.Visibility = (ftpish || webdav) ? Visibility.Visible : Visibility.Collapsed;
+            PasswordPanel.Visibility = (ftpish || webdav || smb || mega || proton) ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 
@@ -180,6 +204,13 @@ public partial class EditDriveWindow : FluentWindow
     {
         // Commit current fields to Result first so the rclone remote name is stable.
         ReadInto(Result);
+
+        if (Result.Provider == ProviderType.OneDrive)
+        {
+            await SignInOnedriveAsync();
+            return;
+        }
+
         try
         {
             OAuthStatusText.Text = "Signing in… finish in the window and browser that opened.";
@@ -195,6 +226,80 @@ public partial class EditDriveWindow : FluentWindow
         finally
         {
             SignInButton.IsEnabled = true;
+        }
+    }
+
+    // ---- OneDrive sign-in (needs its own flow - see RcloneService) --------
+
+    private string? _onedriveResumeState;
+
+    private async Task SignInOnedriveAsync()
+    {
+        OnedriveDriveCard.Visibility = Visibility.Collapsed;
+        SignInButton.IsEnabled = false;
+        try
+        {
+            OAuthStatusText.Text = "Signing in… finish in the browser window that opened.";
+            var token = await RcloneService.AuthorizeOnedriveAsync(Result, url =>
+                Dispatcher.BeginInvoke(() => OAuthStatusText.Text = "Browser didn't open? Copy this link: " + url));
+            if (token == null)
+            {
+                OAuthStatusText.Text = "Not signed in.";
+                MessageBox.Show("Sign-in didn't complete. Try again.", "ZFTP", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            OAuthStatusText.Text = "Finding your OneDrive…";
+            var wizard = await Task.Run(() => RcloneService.BeginOnedriveWizard(Result, token));
+            if (wizard.Error != null)
+            {
+                OAuthStatusText.Text = "Not signed in.";
+                MessageBox.Show(wizard.Error, "ZFTP", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            _onedriveResumeState = wizard.ResumeState;
+            OnedriveDriveCombo.Items.Clear();
+            foreach (var c in wizard.Choices!)
+                OnedriveDriveCombo.Items.Add(new ComboBoxItem { Content = c.Label, Tag = c.Value });
+            OnedriveDriveCombo.SelectedIndex = RcloneService.GuessDefaultOnedriveDrive(wizard.Choices!);
+            OnedriveDriveCard.Visibility = Visibility.Visible;
+            OAuthStatusText.Text = "Pick your OneDrive below, then click \"Use this drive\".";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Couldn't start sign-in: " + ex.Message, "ZFTP", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            SignInButton.IsEnabled = true;
+        }
+    }
+
+    private async void OnedriveChoose_Click(object sender, RoutedEventArgs e)
+    {
+        if (_onedriveResumeState == null || OnedriveDriveCombo.SelectedItem is not ComboBoxItem item) return;
+        var driveId = item.Tag as string ?? "";
+
+        OnedriveChooseButton.IsEnabled = false;
+        try
+        {
+            OAuthStatusText.Text = "Finishing setup…";
+            var result = await Task.Run(() => RcloneService.FinishOnedriveWizard(Result, _onedriveResumeState, driveId));
+            if (result.Error != null)
+            {
+                MessageBox.Show(result.Error, "ZFTP", MessageBoxButton.OK, MessageBoxImage.Warning);
+                OAuthStatusText.Text = "Not signed in.";
+                return;
+            }
+
+            OnedriveDriveCard.Visibility = Visibility.Collapsed;
+            _onedriveResumeState = null;
+            UpdateOAuthStatus();   // now shows "Signed in as …"
+        }
+        finally
+        {
+            OnedriveChooseButton.IsEnabled = true;
         }
     }
 
@@ -262,7 +367,11 @@ public partial class EditDriveWindow : FluentWindow
 
             if (DeviceCombo.Items.Count == 0)
             {
-                DeviceCombo.Items.Add(new ComboBoxItem { Content = "No device detected - plug in and allow USB debugging", Tag = "", IsEnabled = false });
+                // adb might see the phone but stuck unauthorized/offline/blocked - say
+                // exactly what's wrong instead of a generic "not detected".
+                var why = await Task.Run(() => AdbService.ExplainNoReadyDevice())
+                    ?? "No device detected - plug in and allow USB debugging";
+                DeviceCombo.Items.Add(new ComboBoxItem { Content = why, Tag = "", IsEnabled = false });
                 DeviceCombo.SelectedIndex = 0;
                 return;
             }
@@ -344,12 +453,22 @@ public partial class EditDriveWindow : FluentWindow
         var pt = SelectedProvider();
 
         // light validation per provider
-        if ((pt is ProviderType.Sftp or ProviderType.Ftp or ProviderType.Ftps) && string.IsNullOrWhiteSpace(HostBox.Text))
+        if ((pt is ProviderType.Sftp or ProviderType.Ftp or ProviderType.Ftps or ProviderType.Smb) && string.IsNullOrWhiteSpace(HostBox.Text))
         { Warn("Please enter a host."); return; }
         if (pt == ProviderType.WebDav && string.IsNullOrWhiteSpace(UrlBox.Text))
         { Warn("Please enter the WebDAV URL."); return; }
         if (pt == ProviderType.S3 && string.IsNullOrWhiteSpace(S3BucketBox.Text))
         { Warn("Please enter the S3 bucket."); return; }
+        if (pt == ProviderType.Smb && string.IsNullOrWhiteSpace(SmbShareBox.Text))
+        { Warn("Please enter the share name."); return; }
+        if (pt == ProviderType.B2 && (string.IsNullOrWhiteSpace(B2AccountBox.Text) || string.IsNullOrWhiteSpace(B2BucketBox.Text)))
+        { Warn("Please enter the B2 Application Key ID and bucket."); return; }
+        if (pt == ProviderType.Azure && (string.IsNullOrWhiteSpace(AzureAccountBox.Text) || string.IsNullOrWhiteSpace(AzureContainerBox.Text)))
+        { Warn("Please enter the Azure storage account and container."); return; }
+        if (pt == ProviderType.Mega && string.IsNullOrWhiteSpace(UserBox.Text))
+        { Warn("Please enter your Mega account email."); return; }
+        if (pt == ProviderType.Proton && string.IsNullOrWhiteSpace(UserBox.Text))
+        { Warn("Please enter your Proton account username."); return; }
 
         ReadInto(Result);
         DialogResult = true;
@@ -360,7 +479,10 @@ public partial class EditDriveWindow : FluentWindow
         p.Provider = SelectedProvider();
         p.Name = string.IsNullOrWhiteSpace(NameBox.Text) ? "Server" : NameBox.Text.Trim();
         p.Host = HostBox.Text.Trim();
-        p.Port = int.TryParse(PortBox.Text, out var port) ? port : (p.Provider is ProviderType.Ftp or ProviderType.Ftps ? 21 : 22);
+        p.Port = int.TryParse(PortBox.Text, out var port) ? port
+            : p.Provider is ProviderType.Ftp or ProviderType.Ftps ? 21
+            : p.Provider == ProviderType.Smb ? 445
+            : 22;
         p.Username = UserBox.Text.Trim();
         p.Url = UrlBox.Text.Trim();
         p.Auth = AuthCombo.SelectedIndex == 1 ? AuthMethod.PrivateKey : AuthMethod.Password;
@@ -372,6 +494,16 @@ public partial class EditDriveWindow : FluentWindow
         p.S3Bucket = S3BucketBox.Text.Trim();
         p.S3Region = S3RegionBox.Text.Trim();
         p.S3Endpoint = S3EndpointBox.Text.Trim();
+        p.SmbShare = SmbShareBox.Text.Trim();
+        p.SmbDomain = SmbDomainBox.Text.Trim();
+        p.B2AccountId = B2AccountBox.Text.Trim();
+        p.B2ApplicationKey = B2KeyBox.Password;
+        p.B2Bucket = B2BucketBox.Text.Trim();
+        p.AzureAccount = AzureAccountBox.Text.Trim();
+        p.AzureKey = AzureKeyBox.Password;
+        p.AzureContainer = AzureContainerBox.Text.Trim();
+        p.ProtonTwoFactorCode = ProtonTwoFactorBox.Text.Trim();
+        p.ProtonMailboxPassword = ProtonMailboxPasswordBox.Password;
         p.ClientId = ClientIdBox.Text.Trim();
         p.ClientSecret = ClientSecretBox.Password;
         if (p.Provider == ProviderType.Android) p.DeviceSerial = SelectedDeviceSerial();

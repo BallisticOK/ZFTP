@@ -79,6 +79,16 @@ public static class ProfileStore
         public string S3Region { get; set; } = "";
         public string S3Endpoint { get; set; } = "";
         public string S3Bucket { get; set; } = "";
+        public string SmbShare { get; set; } = "";
+        public string SmbDomain { get; set; } = "";
+        public string B2AccountId { get; set; } = "";
+        public string B2ApplicationKeyEnc { get; set; } = "";  // DPAPI ciphertext (base64)
+        public string B2Bucket { get; set; } = "";
+        public string AzureAccount { get; set; } = "";
+        public string AzureKeyEnc { get; set; } = "";  // DPAPI ciphertext (base64)
+        public string AzureContainer { get; set; } = "";
+        public string ProtonTwoFactorCodeEnc { get; set; } = "";     // DPAPI ciphertext (base64)
+        public string ProtonMailboxPasswordEnc { get; set; } = "";   // DPAPI ciphertext (base64)
         public string ClientId { get; set; } = "";
         public string ClientSecretEnc { get; set; } = "";
     }
@@ -113,6 +123,16 @@ public static class ProfileStore
             S3Region = p.S3Region,
             S3Endpoint = p.S3Endpoint,
             S3Bucket = p.S3Bucket,
+            SmbShare = p.SmbShare,
+            SmbDomain = p.SmbDomain,
+            B2AccountId = p.B2AccountId,
+            B2ApplicationKeyEnc = Encrypt(p.B2ApplicationKey),
+            B2Bucket = p.B2Bucket,
+            AzureAccount = p.AzureAccount,
+            AzureKeyEnc = Encrypt(p.AzureKey),
+            AzureContainer = p.AzureContainer,
+            ProtonTwoFactorCodeEnc = Encrypt(p.ProtonTwoFactorCode),
+            ProtonMailboxPasswordEnc = Encrypt(p.ProtonMailboxPassword),
             ClientId = p.ClientId,
             ClientSecretEnc = Encrypt(p.ClientSecret),
         }).ToList();
@@ -156,6 +176,16 @@ public static class ProfileStore
                 S3Region = s.S3Region,
                 S3Endpoint = s.S3Endpoint,
                 S3Bucket = s.S3Bucket,
+                SmbShare = s.SmbShare,
+                SmbDomain = s.SmbDomain,
+                B2AccountId = s.B2AccountId,
+                B2ApplicationKey = Decrypt(s.B2ApplicationKeyEnc),
+                B2Bucket = s.B2Bucket,
+                AzureAccount = s.AzureAccount,
+                AzureKey = Decrypt(s.AzureKeyEnc),
+                AzureContainer = s.AzureContainer,
+                ProtonTwoFactorCode = Decrypt(s.ProtonTwoFactorCodeEnc),
+                ProtonMailboxPassword = Decrypt(s.ProtonMailboxPasswordEnc),
                 ClientId = s.ClientId,
                 ClientSecret = Decrypt(s.ClientSecretEnc),
             }).ToList();
