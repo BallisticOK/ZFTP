@@ -7,6 +7,10 @@
     <Nullable>enable</Nullable>
     <PlatformTarget>x64</PlatformTarget>
     <Platforms>x64</Platforms>
+    <!-- See ZFTP.App.csproj: pins native-asset selection to Windows so packages
+         that ship binaries for every OS don't copy macOS/Linux ones in too. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
   </PropertyGroup>
 
   <ItemGroup>
