@@ -50,8 +50,14 @@ public static class Updater
         var gh = await TryGitHubAsync();
         if (gh != null) candidates.Add(gh);
 
-        var cdn = await TryCdnAsync();
-        if (cdn != null) candidates.Add(cdn);
+        // The CDN only ever serves the Windows installer (ZFTP-Setup-<version>.exe)
+        // - there's no Linux/macOS equivalent convention there, so don't offer it
+        // as a candidate on those OSes.
+        if (OperatingSystem.IsWindows())
+        {
+            var cdn = await TryCdnAsync();
+            if (cdn != null) candidates.Add(cdn);
+        }
 
         if (candidates.Count == 0)
             return new UpdateResult { Status = UpdateCheckStatus.CouldNotCheck };
@@ -84,24 +90,25 @@ public static class Updater
             var version = Clean(tagEl.GetString() ?? "");
             if (!Version.TryParse(version, out _)) return null;
 
-            // Find the .exe installer asset.
+            // Find the release asset built for this OS (blank Url if the release
+            // exists but has nothing published for the OS we're running on - e.g.
+            // Linux/macOS today, since CI only publishes a Windows installer).
             string? url = null;
             if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
             {
                 foreach (var a in assets.EnumerateArray())
                 {
                     var name = a.TryGetProperty("name", out var n) ? n.GetString() : null;
-                    if (name != null && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    if (name != null && AssetMatchesThisOs(name))
                     {
                         url = a.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
                         if (!string.IsNullOrEmpty(url)) break;
                     }
                 }
             }
-            if (string.IsNullOrEmpty(url)) return null;   // release has no installer attached
 
             var notes = root.TryGetProperty("body", out var b) ? (b.GetString() ?? "") : "";
-            return new UpdateInfo { Version = version, Url = url, Notes = notes.Trim(), Source = "GitHub" };
+            return new UpdateInfo { Version = version, Url = url ?? "", Notes = notes.Trim(), Source = "GitHub" };
         }
         catch
         {
@@ -137,6 +144,23 @@ public static class Updater
         return new UpdateInfo { Version = v, Url = InstallerUrl(v), Notes = notes, Source = "CDN" };
     }
 
+    // ---- OS-specific asset matching -----------------------------------------
+
+    /// <summary>Does this GitHub release asset name look like a build for the OS
+    /// we're currently running on? Windows wants the installer .exe; Linux/macOS
+    /// have no installer convention yet, so this matches by OS name/extension in
+    /// whatever the release asset happens to be called.</summary>
+    private static bool AssetMatchesThisOs(string name)
+    {
+        if (OperatingSystem.IsWindows())
+            return name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+        if (OperatingSystem.IsMacOS())
+            return name.Contains("osx", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("macos", StringComparison.OrdinalIgnoreCase)
+                || name.EndsWith(".dmg", StringComparison.OrdinalIgnoreCase);
+        return name.Contains("linux", StringComparison.OrdinalIgnoreCase);
+    }
+
     // ---- download ----------------------------------------------------------
 
     public static async Task<string?> DownloadInstallerAsync(string url)
@@ -146,7 +170,13 @@ public static class Updater
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
             http.DefaultRequestHeaders.Add("User-Agent", "ZFTP-Updater");
             var bytes = await http.GetByteArrayAsync(url);
-            var path = Path.Combine(Path.GetTempPath(), "ZFTP-Setup-update.exe");
+
+            // Keep whatever extension the asset actually has (.exe/.dmg/.tar.gz/...)
+            // rather than assuming Windows's .exe.
+            var ext = Path.GetExtension(new Uri(url).LocalPath);
+            if (string.IsNullOrEmpty(ext)) ext = OperatingSystem.IsWindows() ? ".exe" : "";
+            var path = Path.Combine(Path.GetTempPath(), "ZFTP-update" + ext);
+
             await File.WriteAllBytesAsync(path, bytes);
             return path;
         }

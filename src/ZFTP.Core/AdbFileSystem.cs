@@ -192,8 +192,16 @@ public sealed class AdbFileSystem : FileSystemBase, IDisposable
         var cached = TryGetCachedAttr(path);
         if (cached != null) return cached.Value;
 
-        // `ls -ld` lists the entry itself (for a dir, NOT its contents).
-        if (!AdbService.Shell(_serial, "ls -ld -- " + AdbService.ShellQuote(path), out var output, TimeSpan.FromSeconds(15)))
+        // `ls -Lld` lists the entry itself (for a dir, NOT its contents). The `-L`
+        // dereferences symlinks so a symlinked directory - e.g. /sdcard, which is
+        // ALWAYS a symlink to /storage/self/primary on real devices - is correctly
+        // reported as a directory instead of as a tiny "file" (without -L, toybox
+        // ls reports the link's own lstat, which is never IsDirectory). `-N` stops
+        // toybox from backslash-escaping spaces/specials in names (it does this
+        // whenever stdout isn't a tty, which adb exec-out never is) - without it,
+        // "Files by Google" comes back as "Files\ by\ Google", a literal backslash
+        // that gets misread as a Windows path separator.
+        if (!AdbService.Shell(_serial, "ls -LldN -- " + AdbService.ShellQuote(path), out var output, TimeSpan.FromSeconds(15)))
             throw new FileNotFoundException(path);
 
         foreach (var line in output.Split('\n'))
@@ -569,7 +577,7 @@ public sealed class AdbFileSystem : FileSystemBase, IDisposable
             try
             {
                 // Non-empty directory? `ls -A` lists everything except . and ..
-                if (AdbService.Shell(_serial, "ls -A -- " + AdbService.ShellQuote(d.Path), out var output, TimeSpan.FromSeconds(15)))
+                if (AdbService.Shell(_serial, "ls -ALN -- " + AdbService.ShellQuote(d.Path), out var output, TimeSpan.FromSeconds(15)))
                 {
                     foreach (var line in output.Split('\n'))
                         if (line.Trim().Length > 0) return STATUS_DIRECTORY_NOT_EMPTY;
@@ -697,7 +705,11 @@ public sealed class AdbFileSystem : FileSystemBase, IDisposable
                     try { entries.Add(new("..", BuildInfo(GetAttrsCached(ParentOf(d.Path))))); } catch { }
                 }
 
-                if (AdbService.Shell(_serial, "ls -al -- " + AdbService.ShellQuote(d.Path), out var output, TimeSpan.FromSeconds(60)))
+                // -L for the same reason as GetAttrsCached: without it, listing a
+                // symlinked directory (like the /sdcard root itself) just prints the
+                // link's own entry instead of descending into its contents. -N stops
+                // names with spaces from coming back backslash-escaped.
+                if (AdbService.Shell(_serial, "ls -alLN -- " + AdbService.ShellQuote(d.Path), out var output, TimeSpan.FromSeconds(60)))
                 {
                     foreach (var raw in output.Split('\n'))
                     {

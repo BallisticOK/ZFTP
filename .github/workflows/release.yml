@@ -1,0 +1,206 @@
+name: Release Cross-Platforms
+
+# Push a tag like "v2.6.2" to build the installer and publish a GitHub Release
+# with it attached, with release notes generated from the commits since the
+# previous tag. `workflow_dispatch` lets you run the same pipeline manually
+# (e.g. to test it) without needing a real tag.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g. 2.6.2) - only used for manual runs"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag_name: ${{ steps.version.outputs.tag_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, needed to diff against the previous tag
+          fetch-tags: true
+
+      - name: Determine version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ github.event.inputs.version }}"
+            $tagName = "v$version"
+          } else {
+            $tagName = "${{ github.ref_name }}"
+            $version = $tagName.TrimStart("v")
+          }
+          # Inno Setup's AppVersion / .NET's AssemblyVersion both want a plain
+          # dotted-numeric string - pad a short tag like "2.6" out to 4 parts.
+          $parts = @($version -split "\." | Where-Object { $_ -match "^\d+$" })
+          while ($parts.Count -lt 4) { $parts += "0" }
+          $assemblyVersion = ($parts[0..3] -join ".")
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag_name=$tagName" >> $env:GITHUB_OUTPUT
+          "assembly_version=$assemblyVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Download WinFsp installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path prereqs | Out-Null
+          $headers = @{ "User-Agent" = "ZFTP-CI" }
+          if ($env:GITHUB_TOKEN) { $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN" }
+          $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/winfsp/winfsp/releases/latest" -Headers $headers
+          $asset = $rel.assets | Where-Object { $_.name -match '^winfsp-.*\.msi$' } | Select-Object -First 1
+          if (-not $asset) { throw "Could not find a WinFsp .msi asset in the latest release." }
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "prereqs\winfsp.msi"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ZFTP.Core's net8.0-windows build references winfsp-msil.dll from the
+      # real WinFsp install location - it must actually be installed on the
+      # runner (not just downloaded) before anything gets built/published.
+      - name: Install WinFsp
+        shell: pwsh
+        run: |
+          # A single quoted argument string (not a comma-separated -ArgumentList
+          # array) is the reliable form for Start-Process+msiexec. Verbose
+          # logging so a failure here is diagnosable instead of a bare exit code.
+          $msiLog = "prereqs\winfsp-install.log"
+          $proc = Start-Process msiexec.exe -ArgumentList "/i `"prereqs\winfsp.msi`" /quiet /qn /norestart /l*v `"$msiLog`"" -Wait -PassThru
+          Write-Output "msiexec exit code: $($proc.ExitCode)"
+          if ($proc.ExitCode -ne 0) {
+            if (Test-Path $msiLog) { Get-Content $msiLog -Tail 40 }
+            throw "WinFsp install failed with exit code $($proc.ExitCode)"
+          }
+
+      - name: Restore
+        run: dotnet restore ZFTP.sln
+
+      - name: Publish ZFTP.App
+        run: >
+          dotnet publish src/ZFTP.App/ZFTP.App.csproj -c Release -r win-x64 --self-contained false
+          -o publish
+          -p:Version=${{ steps.version.outputs.assembly_version }}
+          -p:AssemblyVersion=${{ steps.version.outputs.assembly_version }}
+          -p:FileVersion=${{ steps.version.outputs.assembly_version }}
+
+      - name: Publish ZFTP.Updater
+        run: >
+          dotnet publish src/ZFTP.Updater/ZFTP.Updater.csproj -c Release -r win-x64 --self-contained false
+          -o publish
+          -p:Version=${{ steps.version.outputs.assembly_version }}
+          -p:AssemblyVersion=${{ steps.version.outputs.assembly_version }}
+          -p:FileVersion=${{ steps.version.outputs.assembly_version }}
+
+      - name: Download .NET 8 Desktop Runtime installer
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe" -OutFile "prereqs\windowsdesktop-runtime.exe"
+
+      - name: Compile installer
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+        with:
+          path: installer/ZFTP.iss
+          options: >-
+            /DMyAppVersion=${{ steps.version.outputs.version }}
+            /DPublishDir="${{ github.workspace }}\publish"
+            /DIconFile="${{ github.workspace }}\src\ZFTP.App\zftp.ico"
+            /DWinFspMsi="${{ github.workspace }}\prereqs\winfsp.msi"
+            /DDotNetExe="${{ github.workspace }}\prereqs\windowsdesktop-runtime.exe"
+            /DMyOutputDir="${{ github.workspace }}\dist"
+
+      - name: Generate changelog
+        id: changelog
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.version.outputs.tag_name }}"
+          $prevTag = $null
+          if ("${{ github.event_name }}" -eq "push") {
+            $prevTag = git describe --tags --abbrev=0 "$tag^" 2>$null
+            if ($LASTEXITCODE -ne 0) { $prevTag = $null }
+          } else {
+            $prevTag = git describe --tags --abbrev=0 2>$null
+            if ($LASTEXITCODE -ne 0) { $prevTag = $null }
+          }
+
+          if ($prevTag) {
+            $range = "$prevTag..HEAD"
+          } else {
+            $range = "-30" # first-ever release: just the most recent commits
+          }
+          $log = if ($range -eq "-30") { git log -30 --pretty=format:"%s|||%h" } else { git log $range --pretty=format:"%s|||%h" }
+
+          $added = @(); $fixed = @(); $changed = @(); $other = @()
+          foreach ($line in $log) {
+            if (-not $line) { continue }
+            $bits = $line -split '\|\|\|', 2
+            $msg = $bits[0]; $hash = $bits[1]
+            if ($msg -match '^\s*(feat|feature|add)(\(|:)') { $added += "- $msg ($hash)" }
+            elseif ($msg -match '^\s*fix(\(|:)') { $fixed += "- $msg ($hash)" }
+            elseif ($msg -match '^\s*(refactor|perf|chore|style|docs|build|ci)(\(|:)') { $changed += "- $msg ($hash)" }
+            else { $other += "- $msg ($hash)" }
+          }
+
+          $body = "## ZFTP $tag`n`n"
+          if ($added.Count)   { $body += "### Added`n" + ($added -join "`n") + "`n`n" }
+          if ($fixed.Count)   { $body += "### Fixed`n" + ($fixed -join "`n") + "`n`n" }
+          if ($changed.Count) { $body += "### Changed`n" + ($changed -join "`n") + "`n`n" }
+          if ($other.Count)   { $body += "### Other`n" + ($other -join "`n") + "`n`n" }
+          if (-not $prevTag)  { $body += "_Initial release._`n" }
+
+          $body | Out-File -FilePath changelog.md -Encoding utf8
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.tag_name }}
+          name: ZFTP ${{ steps.version.outputs.version }}
+          body_path: changelog.md
+          files: dist/ZFTP-Setup-*.exe
+
+  build-linux:
+    # Runs after the Windows job so the GitHub Release already exists - this
+    # job just adds Linux assets to it. A tarball (always works) plus an
+    # AppImage (needs an actual Linux host to run appimagetool - not possible
+    # from a Windows machine, which is exactly why this lives in CI).
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build tarball
+        run: installer/linux/build-tarball.sh "${{ needs.build-and-release.outputs.version }}"
+
+      - name: Build AppImage
+        run: installer/linux/build-appimage.sh "${{ needs.build-and-release.outputs.version }}"
+
+      - name: Upload Linux assets to the release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.build-and-release.outputs.tag_name }}
+          files: |
+            dist/ZFTP-*-linux-x64.tar.gz
+            dist/ZFTP-*-x86_64.AppImage

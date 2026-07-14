@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ZFTP
+Comment=Mount SFTP/FTP/S3/cloud drives as a local filesystem
+Exec=ZFTP
+Icon=zftp
+Categories=Network;FileTransfer;
+Terminal=false

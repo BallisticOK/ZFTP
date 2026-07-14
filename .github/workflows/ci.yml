@@ -1,0 +1,72 @@
+name: CI Cross-Platforms
+
+# Compile-check on every push/PR: catches regressions in either half of the
+# cross-platform split — the Windows WPF app/native mount engines, and the
+# portable ZFTP.Core/ZFTP.Daemon slice used on Linux/macOS. This is a build
+# smoke test only; it doesn't publish artifacts or run an actual mount (see
+# the "cross-platform" branch's manual verification notes for that).
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      # ZFTP.Core's net8.0-windows build references winfsp-msil.dll from the
+      # real WinFsp install location - it must actually be installed on the
+      # runner (not just present as a NuGet package) before building.
+      - name: Install WinFsp
+        shell: pwsh
+        run: |
+          $headers = @{ "User-Agent" = "ZFTP-CI" }
+          $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/winfsp/winfsp/releases/latest" -Headers $headers
+          $asset = $rel.assets | Where-Object { $_.name -match '^winfsp-.*\.msi$' } | Select-Object -First 1
+          if (-not $asset) { throw "Could not find a WinFsp .msi asset in the latest release." }
+          $msi = "$env:RUNNER_TEMP\winfsp.msi"
+          $msiLog = "$env:RUNNER_TEMP\winfsp-install.log"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $msi
+          # A single quoted argument string (not a comma-separated -ArgumentList
+          # array) is the reliable form for Start-Process+msiexec. Verbose
+          # logging so a failure here is diagnosable instead of a bare exit code.
+          $proc = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /quiet /qn /norestart /l*v `"$msiLog`"" -Wait -PassThru
+          Write-Output "msiexec exit code: $($proc.ExitCode)"
+          if ($proc.ExitCode -ne 0) {
+            if (Test-Path $msiLog) { Get-Content $msiLog -Tail 40 }
+            throw "WinFsp install failed with exit code $($proc.ExitCode)"
+          }
+      - run: dotnet restore ZFTP.sln
+      - run: dotnet build ZFTP.sln -c Debug --no-restore
+
+  linux-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Publish ZFTP.Core (linux-x64)
+        run: dotnet publish src/ZFTP.Core/ZFTP.Core.csproj -f net8.0 -r linux-x64 --self-contained false
+      - name: Publish ZFTP.Daemon (linux-x64)
+        run: dotnet publish src/ZFTP.Daemon/ZFTP.Daemon.csproj -f net8.0 -r linux-x64 --self-contained false
+      - name: Publish ZFTP.App (linux-x64)
+        run: dotnet publish src/ZFTP.App/ZFTP.App.csproj -f net8.0 -r linux-x64 --self-contained false
+
+  macos-build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Publish ZFTP.Core (osx-arm64)
+        run: dotnet publish src/ZFTP.Core/ZFTP.Core.csproj -f net8.0 -r osx-arm64 --self-contained false
+      - name: Publish ZFTP.Daemon (osx-arm64)
+        run: dotnet publish src/ZFTP.Daemon/ZFTP.Daemon.csproj -f net8.0 -r osx-arm64 --self-contained false
+      - name: Publish ZFTP.App (osx-arm64)
+        run: dotnet publish src/ZFTP.App/ZFTP.App.csproj -f net8.0 -r osx-arm64 --self-contained false

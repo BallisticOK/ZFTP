@@ -5,8 +5,10 @@
 //      %AppData%\ZFTP\drives.json
 //
 //  Passwords / key passphrases are NEVER written in plain text. They're
-//  encrypted with Windows DPAPI (ProtectedData), which ties the ciphertext to
-//  your Windows user account — another user (or another PC) can't decrypt it.
+//  AES-GCM encrypted with a key that lives in the OS's native credential
+//  vault (see SecretBox.cs) — Windows Credential Manager / macOS Keychain /
+//  Linux Secret Service — so the ciphertext is tied to your account on any of
+//  the three OSes, not just Windows.
 // ============================================================================
 
 using System.IO;
@@ -68,6 +70,7 @@ public static class ProfileStore
         public string DeviceSerial { get; set; } = "";
         public string RemoteRoot { get; set; } = "/";
         public string DriveLetter { get; set; } = "Z";
+        public string MountPath { get; set; } = "";
         public bool Enabled { get; set; } = true;
         public bool AutoMount { get; set; }
         public AccessMode Access { get; set; } = AccessMode.ReadWrite;
@@ -79,6 +82,16 @@ public static class ProfileStore
         public string S3Region { get; set; } = "";
         public string S3Endpoint { get; set; } = "";
         public string S3Bucket { get; set; } = "";
+        public string SmbShare { get; set; } = "";
+        public string SmbDomain { get; set; } = "";
+        public string B2AccountId { get; set; } = "";
+        public string B2ApplicationKeyEnc { get; set; } = "";  // DPAPI ciphertext (base64)
+        public string B2Bucket { get; set; } = "";
+        public string AzureAccount { get; set; } = "";
+        public string AzureKeyEnc { get; set; } = "";  // DPAPI ciphertext (base64)
+        public string AzureContainer { get; set; } = "";
+        public string ProtonTwoFactorCodeEnc { get; set; } = "";     // DPAPI ciphertext (base64)
+        public string ProtonMailboxPasswordEnc { get; set; } = "";   // DPAPI ciphertext (base64)
         public string ClientId { get; set; } = "";
         public string ClientSecretEnc { get; set; } = "";
     }
@@ -102,6 +115,7 @@ public static class ProfileStore
             DeviceSerial = p.DeviceSerial,
             RemoteRoot = p.RemoteRoot,
             DriveLetter = p.DriveLetter,
+            MountPath = p.MountPath,
             Enabled = p.Enabled,
             AutoMount = p.AutoMount,
             Access = p.Access,
@@ -113,6 +127,16 @@ public static class ProfileStore
             S3Region = p.S3Region,
             S3Endpoint = p.S3Endpoint,
             S3Bucket = p.S3Bucket,
+            SmbShare = p.SmbShare,
+            SmbDomain = p.SmbDomain,
+            B2AccountId = p.B2AccountId,
+            B2ApplicationKeyEnc = Encrypt(p.B2ApplicationKey),
+            B2Bucket = p.B2Bucket,
+            AzureAccount = p.AzureAccount,
+            AzureKeyEnc = Encrypt(p.AzureKey),
+            AzureContainer = p.AzureContainer,
+            ProtonTwoFactorCodeEnc = Encrypt(p.ProtonTwoFactorCode),
+            ProtonMailboxPasswordEnc = Encrypt(p.ProtonMailboxPassword),
             ClientId = p.ClientId,
             ClientSecretEnc = Encrypt(p.ClientSecret),
         }).ToList();
@@ -145,6 +169,7 @@ public static class ProfileStore
                 DeviceSerial = s.DeviceSerial,
                 RemoteRoot = s.RemoteRoot,
                 DriveLetter = s.DriveLetter,
+                MountPath = s.MountPath,
                 Enabled = s.Enabled,
                 AutoMount = s.AutoMount,
                 Access = s.Access,
@@ -156,6 +181,16 @@ public static class ProfileStore
                 S3Region = s.S3Region,
                 S3Endpoint = s.S3Endpoint,
                 S3Bucket = s.S3Bucket,
+                SmbShare = s.SmbShare,
+                SmbDomain = s.SmbDomain,
+                B2AccountId = s.B2AccountId,
+                B2ApplicationKey = Decrypt(s.B2ApplicationKeyEnc),
+                B2Bucket = s.B2Bucket,
+                AzureAccount = s.AzureAccount,
+                AzureKey = Decrypt(s.AzureKeyEnc),
+                AzureContainer = s.AzureContainer,
+                ProtonTwoFactorCode = Decrypt(s.ProtonTwoFactorCodeEnc),
+                ProtonMailboxPassword = Decrypt(s.ProtonMailboxPasswordEnc),
                 ClientId = s.ClientId,
                 ClientSecret = Decrypt(s.ClientSecretEnc),
             }).ToList();
@@ -167,24 +202,25 @@ public static class ProfileStore
         }
     }
 
-    private static string Encrypt(string plain)
-    {
-        if (string.IsNullOrEmpty(plain)) return "";
-        var bytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(plain), Entropy, DataProtectionScope.CurrentUser);
-        return Convert.ToBase64String(bytes);
-    }
+    private static string Encrypt(string plain) => SecretBox.Encrypt(plain);
 
     private static string Decrypt(string cipher)
     {
-        if (string.IsNullOrEmpty(cipher)) return "";
-        try
+        var viaCurrentScheme = SecretBox.TryDecrypt(cipher);
+        if (viaCurrentScheme != null) return viaCurrentScheme;
+
+        // Migration: profiles saved by older ZFTP builds were DPAPI-protected
+        // (Windows-only). Still honor them so upgrading doesn't wipe saved
+        // passwords - the next Save() re-encrypts through SecretBox instead.
+        if (OperatingSystem.IsWindows())
         {
-            var bytes = ProtectedData.Unprotect(Convert.FromBase64String(cipher), Entropy, DataProtectionScope.CurrentUser);
-            return Encoding.UTF8.GetString(bytes);
+            try
+            {
+                var bytes = ProtectedData.Unprotect(Convert.FromBase64String(cipher), Entropy, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(bytes);
+            }
+            catch { /* fall through */ }
         }
-        catch
-        {
-            return "";
-        }
+        return "";
     }
 }

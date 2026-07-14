@@ -14,14 +14,18 @@
 
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 
 namespace ZFTP.Core;
 
 public static class AdbService
 {
-    /// <summary>Path to the bundled adb.exe (sits in a "tools" folder next to ZFTP.exe).</summary>
-    public static string AdbPath =>
-        Path.Combine(AppContext.BaseDirectory, "tools", "adb.exe");
+    private static readonly string AdbExeName = OperatingSystem.IsWindows() ? "adb.exe" : "adb";
+
+    /// <summary>Path to adb: the bundled copy in a "tools" folder next to ZFTP.exe if
+    /// present (how Windows ships it today), otherwise whatever "adb" resolves to on
+    /// PATH (how it's expected to be installed on Linux/macOS for now).</summary>
+    public static string AdbPath => ToolResolver.Resolve(AdbExeName);
 
     public static bool Available => File.Exists(AdbPath);
 
@@ -36,6 +40,11 @@ public static class AdbService
         /// <summary>What we show in the picker, e.g. "Pixel 7 (28301FDH2000XYZ)".</summary>
         public string Label => string.IsNullOrWhiteSpace(Model) ? Serial : $"{Model} ({Serial})";
     }
+
+    /// <summary>One row of raw `adb devices` output, before filtering to only the
+    /// "ready" ones - keeps the real state so callers can tell "nothing plugged in"
+    /// apart from "plugged in but stuck unauthorized/offline/no permissions".</summary>
+    public sealed record RawDevice(string Serial, string State);
 
     /// <summary>Make sure the adb background server is running (first call can be slow).</summary>
     public static void EnsureServer()
@@ -57,13 +66,15 @@ public static class AdbService
         _serverTouched = false;
     }
 
-    /// <summary>Serials of every device currently in the "device" (ready) state.</summary>
-    public static string[] ListDeviceSerials()
+    /// <summary>Every device `adb devices` currently reports, whatever its state
+    /// (device / unauthorized / offline / no permissions / ...). Use this to explain
+    /// *why* a plugged-in phone isn't usable yet, instead of just "not detected".</summary>
+    public static List<RawDevice> ListAllDevices()
     {
+        var result = new List<RawDevice>();
         if (!Run(new[] { "devices" }, out var output, TimeSpan.FromSeconds(15)))
-            return Array.Empty<string>();
+            return result;
 
-        var list = new List<string>();
         foreach (var raw in output.Split('\n'))
         {
             var line = raw.Trim();
@@ -71,11 +82,18 @@ public static class AdbService
                 continue;
             // "SERIAL\tdevice"  (other states: offline / unauthorized / no permissions)
             var parts = line.Split(new[] { '\t', ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 2 && parts[1].Equals("device", StringComparison.OrdinalIgnoreCase))
-                list.Add(parts[0]);
+            if (parts.Length >= 2)
+                result.Add(new RawDevice(parts[0], parts[1]));
         }
-        return list.ToArray();
+        return result;
     }
+
+    /// <summary>Serials of every device currently in the "device" (ready) state.</summary>
+    public static string[] ListDeviceSerials() =>
+        ListAllDevices()
+            .Where(d => d.State.Equals("device", StringComparison.OrdinalIgnoreCase))
+            .Select(d => d.Serial)
+            .ToArray();
 
     /// <summary>Connected, ready devices with a friendly model name for the picker.</summary>
     public static List<Device> ListDevices()
@@ -84,6 +102,26 @@ public static class AdbService
         foreach (var serial in ListDeviceSerials())
             result.Add(new Device(serial, GetModel(serial)));
         return result;
+    }
+
+    /// <summary>
+    /// A human-readable reason why no ready device is available right now, based on
+    /// the *real* adb state - e.g. "stuck on the phone's Allow prompt" instead of a
+    /// generic "not detected" when adb actually can see the device. Null if adb
+    /// reports no devices at all (i.e. it's a genuine "nothing plugged in").
+    /// </summary>
+    public static string? ExplainNoReadyDevice()
+    {
+        var all = ListAllDevices();
+        if (all.Count == 0) return null;
+
+        if (all.Any(d => d.State.Equals("unauthorized", StringComparison.OrdinalIgnoreCase)))
+            return "A device is connected but not authorized yet - check your phone's screen and tap Allow on the \"Allow USB debugging?\" prompt.";
+        if (all.Any(d => d.State.Equals("offline", StringComparison.OrdinalIgnoreCase)))
+            return "A device is connected but offline - try unplugging and replugging the USB cable.";
+        if (all.Any(d => d.State.Contains("no permissions", StringComparison.OrdinalIgnoreCase)))
+            return "A device is connected but Windows denied access - try a different USB cable/port, or reinstall the phone's USB driver.";
+        return $"A device is connected but in an unexpected state ({all[0].State}) - try unplugging and replugging the USB cable.";
     }
 
     /// <summary>True if this serial is currently plugged in and ready.</summary>

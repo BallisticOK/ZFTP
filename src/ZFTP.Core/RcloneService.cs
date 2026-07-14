@@ -13,14 +13,20 @@
 
 using System.Diagnostics;
 using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace ZFTP.Core;
 
 public static class RcloneService
 {
-    /// <summary>Path to the bundled rclone.exe (sits in a "tools" folder next to ZFTP.exe).</summary>
-    public static string RclonePath =>
-        Path.Combine(AppContext.BaseDirectory, "tools", "rclone.exe");
+    private static readonly string RcloneExeName = OperatingSystem.IsWindows() ? "rclone.exe" : "rclone";
+
+    /// <summary>Path to rclone: the bundled copy in a "tools" folder next to ZFTP.exe
+    /// if present (how Windows ships it today), otherwise whatever "rclone" resolves
+    /// to on PATH (how it's expected to be installed on Linux/macOS for now).</summary>
+    public static string RclonePath => ToolResolver.Resolve(RcloneExeName);
 
     /// <summary>ZFTP's private rclone config file.</summary>
     public static string ConfigPath =>
@@ -38,6 +44,9 @@ public static class RcloneService
 
     private static string RcloneType(ProviderType t) => t switch
     {
+        // Only reached on non-Windows - see MountSession.MountRcloneSftp(). Windows
+        // still mounts Sftp through the native WinFsp+SSH.NET engine.
+        ProviderType.Sftp => "sftp",
         ProviderType.Ftp or ProviderType.Ftps => "ftp",
         ProviderType.WebDav => "webdav",
         ProviderType.S3 => "s3",
@@ -45,17 +54,34 @@ public static class RcloneService
         ProviderType.Dropbox => "dropbox",
         ProviderType.OneDrive => "onedrive",
         ProviderType.Box => "box",
+        ProviderType.Smb => "smb",
+        ProviderType.B2 => "b2",
+        ProviderType.Azure => "azureblob",
+        ProviderType.Mega => "mega",
+        ProviderType.Proton => "protondrive",
         _ => "ftp",
+    };
+
+    /// <summary>Backends whose path is rooted at a bucket/share/container rather than
+    /// the remote itself (like S3). Maps a profile to that top-level name.</summary>
+    private static string? BucketLike(ConnectionProfile p) => p.Provider switch
+    {
+        ProviderType.S3 => p.S3Bucket,
+        ProviderType.Smb => p.SmbShare,
+        ProviderType.B2 => p.B2Bucket,
+        ProviderType.Azure => p.AzureContainer,
+        _ => null,
     };
 
     /// <summary>The "remote:path" rclone should mount for this profile.</summary>
     public static string RemotePath(ConnectionProfile p)
     {
         var root = (p.RemoteRoot ?? "").Trim().TrimStart('/');
-        if (p.Provider == ProviderType.S3)
+        var bucket = BucketLike(p);
+        if (bucket != null)
         {
-            var bucket = (p.S3Bucket ?? "").Trim().Trim('/');
-            var sub = string.IsNullOrEmpty(root) ? bucket : $"{bucket}/{root}";
+            var top = bucket.Trim().Trim('/');
+            var sub = string.IsNullOrEmpty(root) ? top : $"{top}/{root}";
             return $"{RemoteName(p)}:{sub}";
         }
         return $"{RemoteName(p)}:{root}";
@@ -74,6 +100,20 @@ public static class RcloneService
 
         switch (p.Provider)
         {
+            case ProviderType.Sftp:
+                args.AddRange(new[] { "host", p.Host, "user", p.Username });
+                if (p.Port > 0) args.AddRange(new[] { "port", p.Port.ToString() });
+                if (p.Auth == AuthMethod.PrivateKey && !string.IsNullOrWhiteSpace(p.KeyPath))
+                {
+                    args.AddRange(new[] { "key_file", p.KeyPath });
+                    if (!string.IsNullOrEmpty(p.KeyPassphrase)) args.AddRange(new[] { "key_file_pass", p.KeyPassphrase });
+                }
+                else
+                {
+                    args.AddRange(new[] { "pass", p.Password });
+                }
+                break;
+
             case ProviderType.Ftp:
             case ProviderType.Ftps:
                 args.AddRange(new[] { "host", p.Host, "user", p.Username, "pass", p.Password });
@@ -94,6 +134,30 @@ public static class RcloneService
                 });
                 if (!string.IsNullOrWhiteSpace(p.S3Region)) args.AddRange(new[] { "region", p.S3Region });
                 if (!string.IsNullOrWhiteSpace(p.S3Endpoint)) args.AddRange(new[] { "endpoint", p.S3Endpoint });
+                break;
+
+            case ProviderType.Smb:
+                args.AddRange(new[] { "host", p.Host, "user", p.Username, "pass", p.Password });
+                if (p.Port > 0) args.AddRange(new[] { "port", p.Port.ToString() });
+                if (!string.IsNullOrWhiteSpace(p.SmbDomain)) args.AddRange(new[] { "domain", p.SmbDomain });
+                break;
+
+            case ProviderType.B2:
+                args.AddRange(new[] { "account", p.B2AccountId, "key", p.B2ApplicationKey });
+                break;
+
+            case ProviderType.Azure:
+                args.AddRange(new[] { "account", p.AzureAccount, "key", p.AzureKey });
+                break;
+
+            case ProviderType.Mega:
+                args.AddRange(new[] { "user", p.Username, "pass", p.Password });
+                break;
+
+            case ProviderType.Proton:
+                args.AddRange(new[] { "username", p.Username, "password", p.Password });
+                if (!string.IsNullOrWhiteSpace(p.ProtonTwoFactorCode)) args.AddRange(new[] { "2fa", p.ProtonTwoFactorCode.Trim() });
+                if (!string.IsNullOrWhiteSpace(p.ProtonMailboxPassword)) args.AddRange(new[] { "mailbox_password", p.ProtonMailboxPassword });
                 break;
         }
 
@@ -116,6 +180,172 @@ public static class RcloneService
             args.AddRange(new[] { "client_secret", p.ClientSecret.Trim() });
         args.AddRange(new[] { "--config", ConfigPath });
         return Start(args, hidden: false);   // visible so rclone's browser flow can run
+    }
+
+    // ---- OneDrive: drive picker --------------------------------------------
+    //
+    // OneDrive needs its own flow because rclone's normal interactive wizard
+    // asks a "which drive?" question that Microsoft can answer with MULTIPLE
+    // candidates for a single account - not just "Personal vs Business", but
+    // also hidden system drives (metadata archives, "Bundles", etc.) alongside
+    // the real one. Driven non-interactively (as StartOAuthSetup does), rclone
+    // silently accepts the FIRST candidate, which is often one of those hidden
+    // drives - the mount then fails with a cryptic Graph API error. So instead
+    // we drive rclone's "--non-interactive --continue" config protocol
+    // ourselves, stopping to let the user pick the real drive from the list.
+
+    private sealed record WizardExample(
+        [property: JsonPropertyName("Value")] string Value,
+        [property: JsonPropertyName("Help")] string Help);
+
+    private sealed record WizardOption(
+        [property: JsonPropertyName("Name")] string? Name,
+        [property: JsonPropertyName("Examples")] List<WizardExample>? Examples);
+
+    private sealed record WizardResponse(
+        [property: JsonPropertyName("State")] string? State,
+        [property: JsonPropertyName("Option")] WizardOption? Option,
+        [property: JsonPropertyName("Error")] string? Error);
+
+    private static readonly JsonSerializerOptions WizardJsonOpts = new() { PropertyNameCaseInsensitive = true };
+
+    private static WizardResponse? RunWizardStep(IEnumerable<string> args)
+    {
+        Run(args, out var raw, TimeSpan.FromSeconds(30));
+        try { return JsonSerializer.Deserialize<WizardResponse>(raw, WizardJsonOpts); }
+        catch { return null; }
+    }
+
+    private static WizardResponse? ContinueWizard(string name, string state, string result) =>
+        RunWizardStep(new[]
+        {
+            "config", "create", name, "onedrive", "--non-interactive", "--continue",
+            "--state", state, "--result", result, "--config", ConfigPath,
+        });
+
+    /// <summary>One drive Microsoft offered for this account.</summary>
+    public sealed record OnedriveDriveOption(string Value, string Label);
+
+    public sealed class OnedriveWizardResult
+    {
+        public bool Done { get; init; }
+        public string? Error { get; init; }
+        public List<OnedriveDriveOption>? Choices { get; init; }   // set when the user must pick
+        public string? ResumeState { get; init; }                  // pass back into FinishOnedriveWizard
+    }
+
+    /// <summary>
+    /// Run rclone's own OAuth flow decoupled from config (so a broken drive pick
+    /// can never poison the token), then return the raw token JSON blob. Opens
+    /// the browser itself, same as before. Null on failure.
+    /// <paramref name="onStatus"/>, if given, is called with the fallback sign-in
+    /// URL as soon as rclone prints it - the caller's only way to show it if the
+    /// browser doesn't open automatically, since we otherwise run this hidden.
+    /// </summary>
+    public static async Task<string?> AuthorizeOnedriveAsync(ConnectionProfile p, Action<string>? onStatus = null)
+    {
+        var args = new List<string> { "authorize", "onedrive" };
+        if (!string.IsNullOrWhiteSpace(p.ClientId) && !string.IsNullOrWhiteSpace(p.ClientSecret))
+            args.AddRange(new[] { p.ClientId.Trim(), p.ClientSecret.Trim() });
+
+        using var proc = new Process { StartInfo = Psi(args, hidden: true) };
+        proc.Start();
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+        var stderrTask = Task.Run(async () =>
+        {
+            string? line;
+            while ((line = await proc.StandardError.ReadLineAsync()) != null)
+            {
+                var m = Regex.Match(line, @"https?://\S+");
+                if (m.Success) onStatus?.Invoke(m.Value);
+            }
+        });
+        await proc.WaitForExitAsync();
+        var stdout = await stdoutTask;
+        await stderrTask;
+
+        var blob = Regex.Match(stdout, @"\{.*\}");
+        return blob.Success ? blob.Value : null;
+    }
+
+    /// <summary>
+    /// Start the OneDrive config wizard with a fresh token and answer the two
+    /// deterministic questions ourselves (don't refresh a token we just got;
+    /// use the plain "onedrive" account type, not a specific Sharepoint site).
+    /// Returns the real list of drives Microsoft has for this account so the
+    /// caller can show it to the user - see the class comment for why this
+    /// can't just be auto-picked.
+    /// </summary>
+    public static OnedriveWizardResult BeginOnedriveWizard(ConnectionProfile p, string tokenJson)
+    {
+        var name = RemoteName(p);
+        var args = new List<string> { "config", "create", name, "onedrive", "token", tokenJson };
+        if (!string.IsNullOrWhiteSpace(p.ClientId)) args.AddRange(new[] { "client_id", p.ClientId.Trim() });
+        if (!string.IsNullOrWhiteSpace(p.ClientSecret)) args.AddRange(new[] { "client_secret", p.ClientSecret.Trim() });
+        args.AddRange(new[] { "--non-interactive", "--config", ConfigPath });
+
+        var r1 = RunWizardStep(args);
+        if (r1 == null) return new() { Error = "Couldn't start the OneDrive setup wizard." };
+        if (!string.IsNullOrEmpty(r1.Error)) return new() { Error = r1.Error };
+        if (r1.Option?.Name != "config_refresh_token" || r1.State == null)
+            return new() { Error = "OneDrive setup asked an unexpected question (rclone may have changed) - please report this." };
+
+        var r2 = ContinueWizard(name, r1.State, "false");
+        if (r2 == null) return new() { Error = "OneDrive setup failed." };
+        if (!string.IsNullOrEmpty(r2.Error)) return new() { Error = r2.Error };
+        if (r2.Option?.Name != "config_type" || r2.State == null)
+            return new() { Error = "OneDrive setup asked an unexpected question (rclone may have changed) - please report this." };
+
+        var r3 = ContinueWizard(name, r2.State, "onedrive");
+        if (r3 == null) return new() { Error = "OneDrive setup failed." };
+        if (!string.IsNullOrEmpty(r3.Error)) return new() { Error = r3.Error };
+
+        var examples = r3.Option?.Examples ?? new List<WizardExample>();
+        if (examples.Count == 0 || r3.State == null)
+            return new() { Error = "Microsoft didn't return any usable OneDrive for this account." };
+
+        return new OnedriveWizardResult
+        {
+            Choices = examples.Select(e => new OnedriveDriveOption(e.Value, e.Help)).ToList(),
+            ResumeState = r3.State,
+        };
+    }
+
+    /// <summary>Finish the wizard once the user has picked which drive to use.</summary>
+    public static OnedriveWizardResult FinishOnedriveWizard(ConnectionProfile p, string resumeState, string chosenDriveId)
+    {
+        var name = RemoteName(p);
+        var r4 = ContinueWizard(name, resumeState, chosenDriveId);
+        if (r4 == null) return new() { Error = "OneDrive setup failed." };
+        if (!string.IsNullOrEmpty(r4.Error)) return new() { Error = r4.Error };
+        if (r4.State == null) return new() { Done = true };   // some accounts skip the confirmation step
+
+        // Final "Drive OK?" confirmation - the user already made the real choice
+        // by picking from the list, so accept it without asking a second time.
+        var r5 = ContinueWizard(name, r4.State, "true");
+        if (r5 == null) return new() { Error = "OneDrive setup failed." };
+        if (!string.IsNullOrEmpty(r5.Error)) return new() { Error = r5.Error };
+        return new OnedriveWizardResult { Done = string.IsNullOrEmpty(r5.State) };
+    }
+
+    /// <summary>
+    /// Best-effort guess at which drive is the "real" one to default the picker
+    /// to - Microsoft's list mixes the actual drive in with hidden system ones
+    /// (metadata archives, "Bundles_...", drives named only by a raw GUID).
+    /// Still just a default; the user can always pick a different one.
+    /// </summary>
+    public static int GuessDefaultOnedriveDrive(List<OnedriveDriveOption> choices)
+    {
+        for (int i = 0; i < choices.Count; i++)
+        {
+            var label = choices[i].Label.Split(" (")[0];
+            if (label.Contains("Metadata", StringComparison.OrdinalIgnoreCase)) continue;
+            if (label.Contains("Bundles", StringComparison.OrdinalIgnoreCase)) continue;
+            if (Regex.IsMatch(label, @"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$")) continue;
+            if (Regex.IsMatch(label, @"^[0-9A-Fa-f]{16,}$")) continue;
+            return i;
+        }
+        return 0;
     }
 
     /// <summary>True if this profile's cloud remote is already authorized (token saved).</summary>
