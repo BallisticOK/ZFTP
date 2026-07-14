@@ -1,4 +1,4 @@
-name: Release
+name: Release Cross-Platforms
 
 # Push a tag like "v2.6.2" to build the installer and publish a GitHub Release
 # with it attached, with release notes generated from the commits since the

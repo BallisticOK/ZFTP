@@ -1,4 +1,4 @@
-name: CI
+name: CI Cross-Platforms
 
 # Compile-check on every push/PR: catches regressions in either half of the
 # cross-platform split — the Windows WPF app/native mount engines, and the
