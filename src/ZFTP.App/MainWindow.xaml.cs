@@ -307,19 +307,18 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>Purge leftover Network-location ghosts from older network-mode builds.</summary>
-    private void CleanGhosts() => NetworkDriveCleanup.CleanGhosts();
+    private void CleanGhosts() => PlatformIntegration.Current.CleanupGhosts();
 
     // ---- custom drive icons in Explorer ------------------------------------
 
     private void SyncDriveIcons()
     {
-        var icon = (Process.GetCurrentProcess().MainModule?.FileName ?? "") + ",0";
         foreach (var s in _servers)
         {
-            if (s.IsMounted) DriveIconManager.SetIcon(s.Profile.DriveLetter, icon);
-            else DriveIconManager.ClearIcon(s.Profile.DriveLetter);
+            if (s.IsMounted) PlatformIntegration.Current.OnDriveMounted(s.Profile);
+            else PlatformIntegration.Current.OnDriveUnmounted(s.Profile);
         }
-        DriveIconManager.Refresh();
+        PlatformIntegration.Current.RefreshShell();
     }
 
     // ---- settings tab ------------------------------------------------------
@@ -327,7 +326,7 @@ public partial class MainWindow : FluentWindow
     private void LoadSettingsToggles()
     {
         _loadingSettings = true;   // suppress the Toggled handlers while we set initial state
-        StartWithWindowsToggle.IsChecked = StartupManager.IsEnabled();
+        StartWithWindowsToggle.IsChecked = PlatformIntegration.Current.IsStartupEnabled();
         StartMinimizedToggle.IsChecked = _settings.StartMinimized;
         TrayOnCloseToggle.IsChecked = _settings.MinimizeToTrayOnClose;
         AutoMountToggle.IsChecked = _settings.AutoMountOnStart;
@@ -339,8 +338,7 @@ public partial class MainWindow : FluentWindow
     {
         if (_loadingSettings) return;
         bool on = StartWithWindowsToggle.IsChecked == true;
-        var exe = Process.GetCurrentProcess().MainModule?.FileName ?? "";
-        StartupManager.Set(on, exe, "--minimized");
+        PlatformIntegration.Current.SetStartupEnabled(on);
         _settings.StartWithWindows = on;
         _settings.Save();
     }
@@ -528,8 +526,8 @@ public partial class MainWindow : FluentWindow
         try { AdbService.KillServer(); } catch { /* ignore */ }
         SaveProfiles();
         // Drop our custom drive icons + Network-location entries (nothing mounted after exit).
-        foreach (var s in _servers) DriveIconManager.ClearIcon(s.Profile.DriveLetter);
-        DriveIconManager.Refresh();
+        foreach (var s in _servers) PlatformIntegration.Current.OnDriveUnmounted(s.Profile);
+        PlatformIntegration.Current.RefreshShell();
         CleanGhosts();
         if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
         Application.Current.Shutdown();
