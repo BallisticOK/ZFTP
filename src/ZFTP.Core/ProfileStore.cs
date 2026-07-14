@@ -5,8 +5,10 @@
 //      %AppData%\ZFTP\drives.json
 //
 //  Passwords / key passphrases are NEVER written in plain text. They're
-//  encrypted with Windows DPAPI (ProtectedData), which ties the ciphertext to
-//  your Windows user account — another user (or another PC) can't decrypt it.
+//  AES-GCM encrypted with a key that lives in the OS's native credential
+//  vault (see SecretBox.cs) — Windows Credential Manager / macOS Keychain /
+//  Linux Secret Service — so the ciphertext is tied to your account on any of
+//  the three OSes, not just Windows.
 // ============================================================================
 
 using System.IO;
@@ -197,24 +199,25 @@ public static class ProfileStore
         }
     }
 
-    private static string Encrypt(string plain)
-    {
-        if (string.IsNullOrEmpty(plain)) return "";
-        var bytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(plain), Entropy, DataProtectionScope.CurrentUser);
-        return Convert.ToBase64String(bytes);
-    }
+    private static string Encrypt(string plain) => SecretBox.Encrypt(plain);
 
     private static string Decrypt(string cipher)
     {
-        if (string.IsNullOrEmpty(cipher)) return "";
-        try
+        var viaCurrentScheme = SecretBox.TryDecrypt(cipher);
+        if (viaCurrentScheme != null) return viaCurrentScheme;
+
+        // Migration: profiles saved by older ZFTP builds were DPAPI-protected
+        // (Windows-only). Still honor them so upgrading doesn't wipe saved
+        // passwords - the next Save() re-encrypts through SecretBox instead.
+        if (OperatingSystem.IsWindows())
         {
-            var bytes = ProtectedData.Unprotect(Convert.FromBase64String(cipher), Entropy, DataProtectionScope.CurrentUser);
-            return Encoding.UTF8.GetString(bytes);
+            try
+            {
+                var bytes = ProtectedData.Unprotect(Convert.FromBase64String(cipher), Entropy, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(bytes);
+            }
+            catch { /* fall through */ }
         }
-        catch
-        {
-            return "";
-        }
+        return "";
     }
 }
