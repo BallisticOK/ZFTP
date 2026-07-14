@@ -90,8 +90,10 @@ jobs:
         run: dotnet restore ZFTP.sln
 
       - name: Publish ZFTP.App
+        # ZFTP.App now multi-targets net8.0-windows;net8.0 (Linux/macOS via
+        # Avalonia) - -f picks the Windows build for this installer.
         run: >
-          dotnet publish src/ZFTP.App/ZFTP.App.csproj -c Release -r win-x64 --self-contained false
+          dotnet publish src/ZFTP.App/ZFTP.App.csproj -c Release -f net8.0-windows -r win-x64 --self-contained false
           -o publish
           -p:Version=${{ steps.version.outputs.assembly_version }}
           -p:AssemblyVersion=${{ steps.version.outputs.assembly_version }}
