@@ -18,6 +18,19 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+      # ZFTP.Core's net8.0-windows build references winfsp-msil.dll from the
+      # real WinFsp install location - it must actually be installed on the
+      # runner (not just present as a NuGet package) before building.
+      - name: Install WinFsp
+        shell: pwsh
+        run: |
+          $headers = @{ "User-Agent" = "ZFTP-CI" }
+          $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/winfsp/winfsp/releases/latest" -Headers $headers
+          $asset = $rel.assets | Where-Object { $_.name -match '^winfsp-.*\.msi$' } | Select-Object -First 1
+          if (-not $asset) { throw "Could not find a WinFsp .msi asset in the latest release." }
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "$env:RUNNER_TEMP\winfsp.msi"
+          Start-Process msiexec.exe -ArgumentList "/i", "$env:RUNNER_TEMP\winfsp.msi", "/quiet", "/qn", "/norestart" -Wait -PassThru |
+            ForEach-Object { if ($_.ExitCode -ne 0) { throw "WinFsp install failed with exit code $($_.ExitCode)" } }
       - run: dotnet restore ZFTP.sln
       - run: dotnet build ZFTP.sln -c Debug --no-restore
 
