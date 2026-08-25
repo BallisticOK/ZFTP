@@ -2,10 +2,11 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-        Title="Edit drive" Height="700" Width="540"
+        Title="Edit drive" Height="760" Width="640"
+        MinHeight="580" MinWidth="560"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica"
-        ResizeMode="NoResize"
+        ResizeMode="CanResizeWithGrip"
         WindowStartupLocation="CenterOwner">
 
     <Grid>
@@ -17,7 +18,8 @@
 
         <ui:TitleBar Grid.Row="0" Title="Drive settings" ShowMaximize="False" ShowMinimize="False" />
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="22,8,22,8">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      PanningMode="VerticalOnly" Padding="22,8,22,8">
             <StackPanel>
                 <TextBlock Text="Type" Margin="0,0,0,4" />
                 <ComboBox x:Name="TypeCombo" Margin="0,0,0,14" SelectionChanged="TypeCombo_SelectionChanged">
@@ -74,8 +76,9 @@
                         <ComboBoxItem Content="Password" IsSelected="True" />
                         <ComboBoxItem Content="SSH private key" />
                     </ComboBox>
-                    <CheckBox x:Name="ForgetHostKeyCheck" Margin="0,0,0,14"
-                              Content="Forget saved server key (re-trust on next connect)" />
+                    <CheckBox x:Name="ForgetHostKeyCheck" Margin="0,0,0,14">
+                        <TextBlock Text="Forget saved server key (re-trust on next connect)" TextWrapping="Wrap" />
+                    </CheckBox>
                 </StackPanel>
 
                 <!-- Password (SFTP/FTP/FTPS/WebDAV) -->
@@ -234,18 +237,26 @@
                 <ui:Card Padding="12">
                     <StackPanel>
                         <Grid Margin="0,0,0,8">
-                            <StackPanel>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,18,0">
                                 <TextBlock Text="Enabled" FontWeight="SemiBold" />
-                                <TextBlock Text="Include this drive in Mount all." Opacity="0.7" FontSize="12" />
+                                <TextBlock Text="Include this drive in Mount all." Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                             </StackPanel>
-                            <ui:ToggleSwitch x:Name="EnabledToggle" HorizontalAlignment="Right" IsChecked="True" />
+                            <ui:ToggleSwitch Grid.Column="1" x:Name="EnabledToggle" HorizontalAlignment="Right" IsChecked="True" />
                         </Grid>
                         <Grid>
-                            <StackPanel>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,18,0">
                                 <TextBlock Text="Auto-mount on startup" FontWeight="SemiBold" />
-                                <TextBlock Text="Mount this drive automatically when ZFTP starts." Opacity="0.7" FontSize="12" />
+                                <TextBlock Text="Mount this drive automatically when ZFTP starts." Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                             </StackPanel>
-                            <ui:ToggleSwitch x:Name="AutoMountToggle" HorizontalAlignment="Right" />
+                            <ui:ToggleSwitch Grid.Column="1" x:Name="AutoMountToggle" HorizontalAlignment="Right" />
                         </Grid>
                     </StackPanel>
                 </ui:Card>

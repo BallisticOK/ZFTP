@@ -7,7 +7,7 @@
 ; ============================================================================
 
 #define MyAppName "ZFTP"
-#define MyAppVersion "2.6.1"
+#define MyAppVersion "2.7.2"
 #define MyAppPublisher "ZFTP"
 #define MyAppExeName "ZFTP.exe"
 #define MyUpdaterExe "ZFTP.Updater.exe"

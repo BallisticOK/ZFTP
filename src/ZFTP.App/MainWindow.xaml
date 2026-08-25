@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:local="clr-namespace:ZFTP.App"
-        Title="ZFTP" Height="620" Width="1040"
-        MinHeight="520" MinWidth="900"
+        Title="ZFTP" Height="700" Width="1120"
+        MinHeight="560" MinWidth="900"
         Icon="/Assets/logo.png"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica"
@@ -46,16 +46,17 @@
                     </Grid.RowDefinitions>
 
                     <!-- toolbar -->
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                    <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
                         <ui:Button Content="Mount all" Appearance="Primary"
                                    Icon="{ui:SymbolIcon Play24}" Click="MountAll_Click" />
                         <ui:Button Content="Unmount all" Margin="8,0,0,0"
                                    Icon="{ui:SymbolIcon Stop24}" Click="UnmountAll_Click" />
                         <ui:Button Content="Save" Margin="8,0,0,0"
                                    Icon="{ui:SymbolIcon Save24}" Click="Save_Click" />
-                    </StackPanel>
+                    </WrapPanel>
 
                     <TextBlock Grid.Row="1" Margin="2,0,0,8" Opacity="0.75"
+                               TextWrapping="Wrap"
                                Text="Add, edit, enable and mount your SFTP drives. Each drive appears in Explorer under the name you give it." />
 
                     <!-- grid + side buttons -->
@@ -207,36 +208,48 @@
 
                         <ui:Card Margin="0,0,0,10" Padding="16,14">
                             <Grid VerticalAlignment="Center">
-                                <StackPanel VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Start ZFTP with Windows" FontWeight="SemiBold" />
                                     <TextBlock Text="Launch automatically when you log into Windows."
-                                               Opacity="0.7" FontSize="12" />
+                                               Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                                 </StackPanel>
-                                <ui:ToggleSwitch x:Name="StartWithWindowsToggle" HorizontalAlignment="Right"
+                                <ui:ToggleSwitch Grid.Column="1" x:Name="StartWithWindowsToggle" HorizontalAlignment="Right"
                                                  VerticalAlignment="Center" Click="StartWithWindows_Toggled" />
                             </Grid>
                         </ui:Card>
 
                         <ui:Card Margin="0,0,0,10" Padding="16,14">
                             <Grid VerticalAlignment="Center">
-                                <StackPanel VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Start in the system tray" FontWeight="SemiBold" />
                                     <TextBlock Text="Open hidden in the tray instead of showing the window."
-                                               Opacity="0.7" FontSize="12" />
+                                               Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                                 </StackPanel>
-                                <ui:ToggleSwitch x:Name="StartMinimizedToggle" HorizontalAlignment="Right"
+                                <ui:ToggleSwitch Grid.Column="1" x:Name="StartMinimizedToggle" HorizontalAlignment="Right"
                                                  VerticalAlignment="Center" Click="StartMinimized_Toggled" />
                             </Grid>
                         </ui:Card>
 
                         <ui:Card Margin="0,0,0,10" Padding="16,14">
                             <Grid VerticalAlignment="Center">
-                                <StackPanel VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Keep running in tray when window is closed" FontWeight="SemiBold" />
                                     <TextBlock Text="Closing the window hides it to the tray (drives stay mounted). Turn off to fully quit on close."
                                                Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                                 </StackPanel>
-                                <ui:ToggleSwitch x:Name="TrayOnCloseToggle" HorizontalAlignment="Right"
+                                <ui:ToggleSwitch Grid.Column="1" x:Name="TrayOnCloseToggle" HorizontalAlignment="Right"
                                                  VerticalAlignment="Center" Click="TrayOnClose_Toggled" />
                             </Grid>
                         </ui:Card>
@@ -245,12 +258,16 @@
 
                         <ui:Card Margin="0,0,0,10" Padding="16,14">
                             <Grid VerticalAlignment="Center">
-                                <StackPanel VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Auto-mount drives on startup" FontWeight="SemiBold" />
                                     <TextBlock Text="When ZFTP starts, mount every enabled drive that has Auto-mount turned on (set per drive in its Edit dialog)."
                                                Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                                 </StackPanel>
-                                <ui:ToggleSwitch x:Name="AutoMountToggle" HorizontalAlignment="Right"
+                                <ui:ToggleSwitch Grid.Column="1" x:Name="AutoMountToggle" HorizontalAlignment="Right"
                                                  VerticalAlignment="Center" Click="AutoMountOnStart_Toggled" />
                             </Grid>
                         </ui:Card>
@@ -259,11 +276,15 @@
 
                         <ui:Card Margin="0,0,0,10" Padding="16,14">
                             <Grid VerticalAlignment="Center">
-                                <StackPanel VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Theme" FontWeight="SemiBold" />
                                     <TextBlock x:Name="ThemeDescriptionText" Text="Built-in and local community themes." Opacity="0.7" FontSize="12" TextWrapping="Wrap" MaxWidth="390" />
                                 </StackPanel>
-                                <ComboBox x:Name="ThemeCombo" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                <ComboBox Grid.Column="1" x:Name="ThemeCombo" HorizontalAlignment="Right" VerticalAlignment="Center"
                                           MinWidth="220" DisplayMemberPath="Name" SelectionChanged="Theme_Changed" />
                                 <!-- Items are populated in code from the theme list. -->
                             </Grid>
@@ -292,12 +313,16 @@
 
                         <ui:Card Margin="0,0,0,10" Padding="16,14">
                             <Grid VerticalAlignment="Center">
-                                <StackPanel VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock x:Name="VersionText" Text="ZFTP version 0.1.0" FontWeight="SemiBold" />
                                     <TextBlock x:Name="UpdateStatusText" Text="Check for a newer version of ZFTP."
                                                Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                                 </StackPanel>
-                                <ui:Button x:Name="CheckUpdateButton" Content="Check for updates"
+                                <ui:Button Grid.Column="1" x:Name="CheckUpdateButton" Content="Check for updates"
                                            HorizontalAlignment="Right" VerticalAlignment="Center"
                                            Icon="{ui:SymbolIcon ArrowSync24}" Click="CheckUpdate_Click" />
                             </Grid>
@@ -327,7 +352,8 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse x:Name="GlobalStatusDot" Width="9" Height="9" Fill="Gray"
                              VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <TextBlock x:Name="GlobalStatusText" Text="Idle — no drives mounted" VerticalAlignment="Center" />
+                    <TextBlock x:Name="GlobalStatusText" Text="Idle — no drives mounted" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" MaxWidth="300" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">

@@ -18,6 +18,7 @@ public partial class App : Application
     // launch fails to acquire it and exits — preventing two instances from
     // fighting over the same drive letters.
     private Mutex? _singleInstance;
+    private bool _ownsSingleInstance;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -28,6 +29,8 @@ public partial class App : Application
             Shutdown();
             return;
         }
+
+        _ownsSingleInstance = true;
 
         // Load WinFsp's native DLL up front so mounting works even when ZFTP is
         // published as a self-contained app, and move any old config to the new
@@ -51,7 +54,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _singleInstance?.ReleaseMutex();
+        if (_ownsSingleInstance)
+            _singleInstance?.ReleaseMutex();
         _singleInstance?.Dispose();
         base.OnExit(e);
     }
