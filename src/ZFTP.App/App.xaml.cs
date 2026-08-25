@@ -33,10 +33,16 @@ public partial class App : Application
         _ownsSingleInstance = true;
 
         // Load WinFsp's native DLL up front so mounting works even when ZFTP is
-        // published as a self-contained app, and move any old config to the new
-        // C:\ProgramData\ZFTP folder.
+        // published as a self-contained app, and move any old ProgramData config
+        // into the current per-user AppData\ZFTP folder.
         WinFspNative.EnsureLoaded();
         ProfileStore.MigrateOldLocation();
+
+        // rclone is a child process for every FTP/cloud mount. If an older ZFTP
+        // was killed or crashed, Windows can leave those children alive and the
+        // drive letters stay occupied forever. Reclaim only our bundled copy on
+        // startup; newly-started children are also placed in a kill-on-close job.
+        RcloneService.CleanupStaleProcesses();
 
         // Safety net + crash logging so we can see what's going wrong.
         var log = System.IO.Path.Combine(ProfileStore.FolderPath, "crash.log");

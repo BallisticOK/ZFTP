@@ -12,7 +12,7 @@
 
 <br/>
 
-[![version](https://img.shields.io/badge/version-2.7.5-2D7DD2?style=for-the-badge)](https://github.com/BallisticOK/ZFTP/releases)
+[![version](https://img.shields.io/badge/version-2.7.6-2D7DD2?style=for-the-badge)](https://github.com/BallisticOK/ZFTP/releases)
 [![platform](https://img.shields.io/badge/Windows%2010%20%2F%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/BallisticOK/ZFTP/releases)
 [![.NET 8](https://img.shields.io/badge/.NET%208%20%2B%20WPF-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![price](https://img.shields.io/badge/price-%240.00%20forever-22C55E?style=for-the-badge)](#-why-it-exists)

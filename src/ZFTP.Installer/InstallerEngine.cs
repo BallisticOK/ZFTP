@@ -12,7 +12,7 @@ public sealed record InstallProgress(int Percent, string Status, string Detail);
 
 public sealed class InstallerEngine
 {
-    public static string Version { get; } = typeof(InstallerEngine).Assembly.GetName().Version?.ToString(3) ?? "2.7.5";
+    public static string Version { get; } = typeof(InstallerEngine).Assembly.GetName().Version?.ToString(3) ?? "2.7.6";
     public static string DefaultInstallPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "ZFTP");
 
     private const string PayloadResource = "ZFTP.Payload.zip";

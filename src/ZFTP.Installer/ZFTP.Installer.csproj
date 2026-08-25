@@ -12,9 +12,9 @@
     <Platforms>x64</Platforms>
     <ApplicationIcon>..\ZFTP.App\zftp.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>2.7.5</Version>
-    <FileVersion>2.7.5.0</FileVersion>
-    <AssemblyVersion>2.7.5.0</AssemblyVersion>
+    <Version>2.7.6</Version>
+    <FileVersion>2.7.6.0</FileVersion>
+    <AssemblyVersion>2.7.6.0</AssemblyVersion>
     <Company>ZFTP</Company>
     <Product>ZFTP Installer</Product>
   </PropertyGroup>

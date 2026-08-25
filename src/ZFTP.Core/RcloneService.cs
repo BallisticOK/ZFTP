@@ -11,8 +11,10 @@
 //  sign-in via `rclone config create`, so we never have to register apps.
 // ============================================================================
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -21,6 +23,64 @@ namespace ZFTP.Core;
 
 public static class RcloneService
 {
+    private const uint JobObjectLimitKillOnJobClose = 0x00002000;
+    private const int JobObjectExtendedLimitInformation = 9;
+    private static readonly object JobSync = new();
+    private static readonly ConcurrentDictionary<int, ConcurrentQueue<string>> ProcessOutput = new();
+    private static IntPtr _lifetimeJob;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct IoCounters
+    {
+        public ulong ReadOperationCount;
+        public ulong WriteOperationCount;
+        public ulong OtherOperationCount;
+        public ulong ReadTransferCount;
+        public ulong WriteTransferCount;
+        public ulong OtherTransferCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BasicLimitInformation
+    {
+        public long PerProcessUserTimeLimit;
+        public long PerJobUserTimeLimit;
+        public uint LimitFlags;
+        public UIntPtr MinimumWorkingSetSize;
+        public UIntPtr MaximumWorkingSetSize;
+        public uint ActiveProcessLimit;
+        public UIntPtr Affinity;
+        public uint PriorityClass;
+        public uint SchedulingClass;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ExtendedLimitInformation
+    {
+        public BasicLimitInformation BasicLimitInformation;
+        public IoCounters IoInfo;
+        public UIntPtr ProcessMemoryLimit;
+        public UIntPtr JobMemoryLimit;
+        public UIntPtr PeakProcessMemoryUsed;
+        public UIntPtr PeakJobMemoryUsed;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr CreateJobObject(IntPtr jobAttributes, string? name);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetInformationJobObject(
+        IntPtr job,
+        int infoClass,
+        IntPtr info,
+        uint infoLength);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr handle);
+
     /// <summary>Path to the bundled rclone.exe (sits in a "tools" folder next to ZFTP.exe).</summary>
     public static string RclonePath =>
         Path.Combine(AppContext.BaseDirectory, "tools", "rclone.exe");
@@ -30,6 +90,42 @@ public static class RcloneService
         Path.Combine(ProfileStore.FolderPath, "rclone.conf");
 
     public static bool Available => File.Exists(RclonePath);
+
+    /// <summary>
+    /// Remove rclone processes left behind by an older ZFTP crash/debug stop.
+    /// We only touch processes whose executable is this exact bundled rclone, so
+    /// a user's separately-installed rclone is never affected.
+    /// </summary>
+    public static void CleanupStaleProcesses()
+    {
+        if (!Available) return;
+
+        string ours;
+        try { ours = Path.GetFullPath(RclonePath); }
+        catch { return; }
+
+        foreach (var process in Process.GetProcessesByName("rclone"))
+        {
+            try
+            {
+                var path = process.MainModule?.FileName;
+                if (string.IsNullOrWhiteSpace(path)) continue;
+                if (!Path.GetFullPath(path).Equals(ours, StringComparison.OrdinalIgnoreCase)) continue;
+
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(3000);
+            }
+            catch
+            {
+                // Best effort. A protected/elevated process may be unreadable;
+                // normal mount diagnostics will still report the occupied letter.
+            }
+            finally
+            {
+                process.Dispose();
+            }
+        }
+    }
 
     /// <summary>The rclone remote name we use for a profile (its stable id).</summary>
     public static string RemoteName(ConnectionProfile p) => "zftp_" + p.Id;
@@ -87,7 +183,11 @@ public static class RcloneService
     /// Create/replace the rclone remote for a credential backend (no OAuth).
     /// Returns true on success.
     /// </summary>
-    public static bool CreateCredentialRemote(ConnectionProfile p)
+    public static bool CreateCredentialRemote(ConnectionProfile p) =>
+        CreateCredentialRemote(p, out _);
+
+    /// <summary>Create/replace a credential remote and return rclone's error text on failure.</summary>
+    public static bool CreateCredentialRemote(ConnectionProfile p, out string error)
     {
         var name = RemoteName(p);
         var args = new List<string> { "config", "create", name, RcloneType(p.Provider) };
@@ -142,7 +242,9 @@ public static class RcloneService
         }
 
         args.AddRange(new[] { "--config", ConfigPath, "--obscure", "--non-interactive" });
-        return Run(args, out _, TimeSpan.FromSeconds(30));
+        var ok = Run(args, out var output, TimeSpan.FromSeconds(30));
+        error = ok ? "" : FriendlyRcloneError(output);
+        return ok;
     }
 
     /// <summary>
@@ -492,6 +594,27 @@ public static class RcloneService
     {
         var p = new Process { StartInfo = Psi(args, hidden) };
         p.Start();
+        AttachToLifetimeJob(p);
+
+        // A long-lived mount must continuously drain redirected pipes. If nobody
+        // reads them, enough warnings/notices will fill the OS pipe buffer and
+        // rclone blocks forever. Keep only a small tail for useful UI errors.
+        if (hidden && p.StartInfo.RedirectStandardError && p.StartInfo.RedirectStandardOutput)
+        {
+            var lines = new ConcurrentQueue<string>();
+            ProcessOutput[p.Id] = lines;
+            void Capture(string? line)
+            {
+                if (string.IsNullOrWhiteSpace(line)) return;
+                lines.Enqueue(line.Trim());
+                while (lines.Count > 100 && lines.TryDequeue(out _)) { }
+            }
+
+            p.ErrorDataReceived += (_, e) => Capture(e.Data);
+            p.OutputDataReceived += (_, e) => Capture(e.Data);
+            p.BeginErrorReadLine();
+            p.BeginOutputReadLine();
+        }
         return p;
     }
 
@@ -499,9 +622,101 @@ public static class RcloneService
     {
         using var p = new Process { StartInfo = Psi(args, hidden: true) };
         p.Start();
-        output = p.StandardError.ReadToEnd() + p.StandardOutput.ReadToEnd();
-        if (!p.WaitForExit((int)timeout.TotalMilliseconds)) { try { p.Kill(); } catch { } return false; }
+        AttachToLifetimeJob(p);
+
+        // Drain both redirected pipes concurrently. Reading one fully before the
+        // other can deadlock if rclone fills the second pipe while it is blocked.
+        var stderr = p.StandardError.ReadToEndAsync();
+        var stdout = p.StandardOutput.ReadToEndAsync();
+        if (!p.WaitForExit((int)timeout.TotalMilliseconds))
+        {
+            try { p.Kill(entireProcessTree: true); } catch { }
+            output = "rclone timed out.";
+            return false;
+        }
+        output = stderr.GetAwaiter().GetResult() + stdout.GetAwaiter().GetResult();
         return p.ExitCode == 0;
+    }
+
+    /// <summary>Read a concise failure from a hidden rclone process after it exits.</summary>
+    public static string GetProcessFailure(Process process)
+    {
+        try
+        {
+            if (!process.HasExited) return "";
+            process.WaitForExit(); // flush async OutputDataReceived/ErrorDataReceived callbacks
+            if (!ProcessOutput.TryGetValue(process.Id, out var lines)) return "";
+            return FriendlyRcloneError(string.Join(Environment.NewLine, lines));
+        }
+        catch { return ""; }
+    }
+
+    /// <summary>Drop the bounded output tail once a mount process is no longer owned.</summary>
+    public static void ForgetProcess(Process? process)
+    {
+        if (process == null) return;
+        try { ProcessOutput.TryRemove(process.Id, out _); } catch { }
+    }
+
+    private static string FriendlyRcloneError(string? output)
+    {
+        if (string.IsNullOrWhiteSpace(output)) return "rclone did not report a reason.";
+
+        var lines = output.Replace("\r", "")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(line => !line.StartsWith("NOTICE:", StringComparison.OrdinalIgnoreCase))
+            .TakeLast(4)
+            .ToArray();
+        var text = string.Join(" ", lines);
+        return text.Length <= 700 ? text : text[^700..];
+    }
+
+    private static void AttachToLifetimeJob(Process process)
+    {
+        try
+        {
+            var job = EnsureLifetimeJob();
+            if (job != IntPtr.Zero)
+                AssignProcessToJobObject(job, process.Handle);
+        }
+        catch
+        {
+            // Lifecycle hardening is best effort. Mounting must still work on a
+            // machine where nested job objects are restricted by another host.
+        }
+    }
+
+    private static IntPtr EnsureLifetimeJob()
+    {
+        lock (JobSync)
+        {
+            if (_lifetimeJob != IntPtr.Zero) return _lifetimeJob;
+
+            var job = CreateJobObject(IntPtr.Zero, null);
+            if (job == IntPtr.Zero) return IntPtr.Zero;
+
+            var info = new ExtendedLimitInformation();
+            info.BasicLimitInformation.LimitFlags = JobObjectLimitKillOnJobClose;
+            int size = Marshal.SizeOf<ExtendedLimitInformation>();
+            var buffer = Marshal.AllocHGlobal(size);
+            try
+            {
+                Marshal.StructureToPtr(info, buffer, false);
+                if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, buffer, (uint)size))
+                {
+                    CloseHandle(job);
+                    return IntPtr.Zero;
+                }
+            }
+            finally
+            {
+                if (buffer != IntPtr.Zero)
+                    Marshal.FreeHGlobal(buffer);
+            }
+
+            _lifetimeJob = job;
+            return _lifetimeJob;
+        }
     }
 
     /// <summary>The volume name rclone uses (also the share part of its \\server\&lt;name&gt; UNC).</summary>

@@ -36,9 +36,6 @@ public sealed class MountSession : IDisposable
     private AfcFileSystem? _afc;     // used for the iPhone/iPad (Apple AFC) provider
     private Process? _rcloneProc;   // used for non-SFTP (rclone-backed) drives
 
-    private SshClient? _statsClient;        // separate SSH channel used only to run `df`
-    private volatile bool _statsUnsupported; // server blocked exec / df missing → stop probing
-
     private readonly object _sync = new();
     private volatile bool _shouldBeMounted;   // user wants this mounted → watchdog keeps it alive
     private volatile bool _busy;              // a mount/reconnect is in progress
@@ -118,10 +115,6 @@ public sealed class MountSession : IDisposable
         {
             if (!_shouldBeMounted || _busy) return;
 
-            // While healthily mounted, keep the SFTP drive's reported size current.
-            if (State == MountState.Mounted && Profile.Provider == ProviderType.Sftp && !_statsUnsupported)
-                Task.Run(RefreshDiskSpace);
-
             bool dead;
             try
             {
@@ -170,12 +163,18 @@ public sealed class MountSession : IDisposable
 
         SetState(MountState.Connecting);
 
+        if (MountPointInUse())
+            throw new InvalidOperationException(
+                $"Drive {MountPoint} is already in use. ZFTP now clears its own stale rclone mounts on startup; " +
+                "if this keeps happening, choose another drive letter or close the program currently using it.");
+
         // Credential backends are configured here; OAuth ones must already be
         // authorized (the Edit dialog runs the browser sign-in once).
         if (!RcloneService.RequiresOAuth(Profile.Provider))
         {
-            if (!RcloneService.CreateCredentialRemote(Profile))
-                throw new InvalidOperationException("Couldn't configure the connection. Check the details and try again.");
+            if (!RcloneService.CreateCredentialRemote(Profile, out var configError))
+                throw new InvalidOperationException(
+                    "Couldn't configure the rclone connection. " + configError);
         }
 
         _rcloneProc = RcloneService.Mount(Profile, MountPoint);
@@ -185,8 +184,13 @@ public sealed class MountSession : IDisposable
         while (sw.Elapsed < TimeSpan.FromSeconds(20))
         {
             if (_rcloneProc.HasExited)
-                throw new InvalidOperationException("The connection failed before the drive could mount. Double-check the address and credentials.");
-            if (Directory.Exists(MountPoint))
+            {
+                var detail = RcloneService.GetProcessFailure(_rcloneProc);
+                throw new InvalidOperationException(
+                    "rclone stopped before the drive could mount. " +
+                    (string.IsNullOrWhiteSpace(detail) ? "Double-check the address and credentials." : detail));
+            }
+            if (MountPointReady())
             {
                 LastError = null;
                 _shouldBeMounted = true;
@@ -195,7 +199,34 @@ public sealed class MountSession : IDisposable
             }
             System.Threading.Thread.Sleep(400);
         }
-        throw new InvalidOperationException("Timed out waiting for the drive to appear.");
+        throw new InvalidOperationException(
+            $"Timed out waiting for {MountPoint} to appear. rclone is still running, so this usually means WinFsp " +
+            "could not publish the drive letter. Check that the letter is free and that WinFsp is installed correctly.");
+    }
+
+    private bool MountPointInUse()
+    {
+        try
+        {
+            var letter = char.ToUpperInvariant(Profile.DriveLetter.TrimEnd(':', '\\')[0]);
+            return DriveInfo.GetDrives().Any(d =>
+                d.Name.Length > 0 && char.ToUpperInvariant(d.Name[0]) == letter);
+        }
+        catch { return false; }
+    }
+
+    private bool MountPointReady()
+    {
+        try
+        {
+            var letter = char.ToUpperInvariant(Profile.DriveLetter.TrimEnd(':', '\\')[0]);
+            return DriveInfo.GetDrives().Any(d =>
+                d.Name.Length > 0 && char.ToUpperInvariant(d.Name[0]) == letter);
+        }
+        catch
+        {
+            return Directory.Exists(MountPoint + "\\");
+        }
     }
 
     // ---- native Android (adb) engine ---------------------------------------
@@ -496,11 +527,10 @@ public sealed class MountSession : IDisposable
             _shouldBeMounted = true;
             SetState(MountState.Mounted);
 
-            // Learn the drive's real size in the background (best-effort; many
-            // SFTP-only servers block shell exec, in which case we keep the
-            // placeholder size and never try again).
-            _statsUnsupported = false;
-            Task.Run(RefreshDiskSpace);
+            // Deliberately avoid opening a second SSH shell just to run `df`.
+            // SSH.NET 2026 can leave an internal command task faulted when that
+            // auxiliary channel is torn down. SFTP mounting itself does not need
+            // shell access, so keep capacity reporting on the safe placeholder.
             return true;
         }
         catch (Exception ex)
@@ -510,87 +540,6 @@ public sealed class MountSession : IDisposable
             SetState(MountState.Error);
             return false;
         }
-    }
-
-    // ---- real drive size (SFTP) -------------------------------------------
-
-    /// <summary>
-    /// Ask the server for the real size/free space of the mounted path by running
-    /// `df` over a second SSH channel, and feed the numbers to the filesystem so
-    /// Explorer shows the true drive size instead of a placeholder. Best-effort:
-    /// if the server doesn't allow running commands, we give up quietly.
-    /// </summary>
-    private void RefreshDiskSpace()
-    {
-        if (_statsUnsupported) return;
-        var fs = _fs;
-        if (fs == null) return;
-
-        try
-        {
-            if (_statsClient is not { IsConnected: true })
-            {
-                try { _statsClient?.Dispose(); } catch { }
-                _statsClient = new SshClient(BuildConnectionInfo());
-                _statsClient.Connect();
-            }
-
-            string path = string.IsNullOrWhiteSpace(Profile.RemoteRoot) ? "/" : Profile.RemoteRoot;
-            // -P = POSIX one-line output, -k = 1024-byte blocks.
-            var cmd = _statsClient.RunCommand("df -Pk " + ShellQuote(path));
-
-            if (cmd.ExitStatus == 0 && TryParseDf(cmd.Result, out long total, out long free))
-            {
-                fs.UpdateVolumeSpace(total, free);
-            }
-            else
-            {
-                // df missing or exec blocked — stop probing and drop the channel.
-                _statsUnsupported = true;
-                try { _statsClient?.Dispose(); } catch { }
-                _statsClient = null;
-            }
-        }
-        catch
-        {
-            _statsUnsupported = true;
-            try { _statsClient?.Dispose(); } catch { }
-            _statsClient = null;
-        }
-    }
-
-    /// <summary>Single-quote a path for a POSIX shell (handles embedded quotes).</summary>
-    private static string ShellQuote(string s) => "'" + s.Replace("'", "'\\''") + "'";
-
-    /// <summary>
-    /// Parse `df -Pk` output. The data row is:
-    /// Filesystem  1024-blocks  Used  Available  Capacity  Mounted-on
-    /// We take total = blocks*1024 and free = available*1024.
-    /// </summary>
-    private static bool TryParseDf(string output, out long totalBytes, out long freeBytes)
-    {
-        totalBytes = 0;
-        freeBytes = 0;
-        if (string.IsNullOrWhiteSpace(output)) return false;
-
-        foreach (var line in output.Split('\n'))
-        {
-            var t = line.Trim();
-            if (t.Length == 0 || t.StartsWith("Filesystem", StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var cols = t.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-            if (cols.Length >= 4
-                && long.TryParse(cols[1], out long blocks)
-                && long.TryParse(cols[3], out long avail)
-                && blocks > 0)
-            {
-                totalBytes = blocks * 1024L;
-                freeBytes = avail * 1024L;
-                return true;
-            }
-        }
-        return false;
     }
 
     public void Unmount()
@@ -609,8 +558,6 @@ public sealed class MountSession : IDisposable
         try { _host?.Unmount(); } catch { /* ignore */ }
         try { _client?.Disconnect(); } catch { /* ignore */ }
         try { _client?.Dispose(); } catch { /* ignore */ }
-        try { _statsClient?.Disconnect(); } catch { /* ignore */ }
-        try { _statsClient?.Dispose(); } catch { /* ignore */ }
         try { _adb?.Dispose(); } catch { /* ignore */ }
         try { _afc?.Dispose(); } catch { /* ignore */ }
         _host = null;
@@ -618,10 +565,9 @@ public sealed class MountSession : IDisposable
         _fs = null;
         _adb = null;
         _afc = null;
-        _statsClient = null;
-
         // rclone-backed: killing rclone unmounts its drive (WinFsp tears down on exit)
         try { if (_rcloneProc is { HasExited: false }) _rcloneProc.Kill(); } catch { /* ignore */ }
+        RcloneService.ForgetProcess(_rcloneProc);
         try { _rcloneProc?.Dispose(); } catch { /* ignore */ }
         _rcloneProc = null;
     }
