@@ -68,7 +68,7 @@ It started as an SFTP tool. It now mounts **eleven kinds of storage** through on
 - **Self-healing** — a watchdog silently remounts after sleep, Wi-Fi drops, or a phone reconnect
 - **System tray** — closing the window keeps drives mounted
 - **Built-in updater** from GitHub Releases / CDN
-- **10 themes**, dark and light, with accent colours
+- **16 built-in themes + local community themes** — palettes, fonts, density, corners and glass/no-glass backdrops ([theme guide](docs/themes.md))
 
 </td>
 </tr>

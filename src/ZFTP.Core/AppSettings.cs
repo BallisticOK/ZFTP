@@ -23,8 +23,8 @@ public sealed class AppSettings
     /// <summary>Closing the window hides to the tray (true) or fully exits (false).</summary>
     public bool MinimizeToTrayOnClose { get; set; } = true;
 
-    /// <summary>"Dark" or "Light".</summary>
-    public string Theme { get; set; } = "Dark";
+    /// <summary>Stable theme id (older builds may contain the display name).</summary>
+    public string Theme { get; set; } = "dark-blue";
 
     // ---- persistence -------------------------------------------------------
 
@@ -32,12 +32,15 @@ public sealed class AppSettings
 
     public static AppSettings Load()
     {
-        try
+        foreach (var path in new[] { FilePath, FilePath + ".bak" })
         {
-            if (File.Exists(FilePath))
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath)) ?? new AppSettings();
+            try
+            {
+                if (File.Exists(path))
+                    return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path)) ?? new AppSettings();
+            }
+            catch { /* try the backup */ }
         }
-        catch { /* fall through to defaults */ }
         return new AppSettings();
     }
 
@@ -45,8 +48,8 @@ public sealed class AppSettings
     {
         try
         {
-            Directory.CreateDirectory(ProfileStore.FolderPath);
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+            AtomicFile.WriteAllText(FilePath,
+                JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch { /* ignore */ }
     }

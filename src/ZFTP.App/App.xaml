@@ -1,6 +1,7 @@
 <Application x:Class="ZFTP.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:system="clr-namespace:System;assembly=System.Runtime"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:local="clr-namespace:ZFTP.App"
              StartupUri="MainWindow.xaml">
@@ -11,6 +12,27 @@
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- ZFTP theme tokens. ThemeManager replaces these at runtime and
+                 DynamicResource updates the live UI without recreating windows. -->
+            <SolidColorBrush x:Key="ZftpAccentBrush" Color="#2D7DD2" />
+            <SolidColorBrush x:Key="ZftpWindowBackgroundBrush" Color="#0E1117" />
+            <SolidColorBrush x:Key="ZftpSurfaceBrush" Color="#161B22" />
+            <SolidColorBrush x:Key="ZftpSurfaceAltBrush" Color="#1F2630" />
+            <SolidColorBrush x:Key="ZftpBorderBrush" Color="#30363D" />
+            <SolidColorBrush x:Key="ZftpTextBrush" Color="#F0F4F8" />
+            <SolidColorBrush x:Key="ZftpMutedTextBrush" Color="#A4AFBA" />
+            <SolidColorBrush x:Key="ZftpSelectionBrush" Color="#553B82F6" />
+            <SolidColorBrush x:Key="ZftpHoverBrush" Color="#22FFFFFF" />
+            <SolidColorBrush x:Key="ZftpBadgeBrush" Color="#332D7DD2" />
+            <SolidColorBrush x:Key="ZftpStatusBarBrush" Color="#10151C" />
+            <SolidColorBrush x:Key="ZftpSuccessBrush" Color="#4ADE80" />
+            <SolidColorBrush x:Key="ZftpWarningBrush" Color="#FBBF24" />
+            <SolidColorBrush x:Key="ZftpErrorBrush" Color="#FB7185" />
+            <CornerRadius x:Key="ZftpCornerRadius">10</CornerRadius>
+            <CornerRadius x:Key="ZftpSmallCornerRadius">5</CornerRadius>
+            <system:Double x:Key="ZftpRowHeight">48</system:Double>
+            <FontFamily x:Key="ZftpThemeFontFamily">Segoe UI</FontFamily>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

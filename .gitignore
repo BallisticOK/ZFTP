@@ -1,0 +1,56 @@
+# Visual Studio / IDE user state
+/.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Claude local project state
+/.claude/
+
+# .NET build output
+**/[Bb]in/
+**/[Oo]bj/
+**/[Ll]og/
+**/[Ll]ogs/
+TestResults/
+artifacts/
+
+# Published / packaged output
+/dist/
+**/publish/
+*.zip
+*.nupkg
+*.snupkg
+
+# NuGet restore artifacts
+packages/
+*.nuget.props
+*.nuget.targets
+
+# JetBrains Rider / ReSharper
+.idea/
+*.DotSettings.user
+_ReSharper*/
+*.ReSharper
+
+# VS Code machine-local settings (keep the .code-workspace file)
+.vscode/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Crash dumps / profiling output
+*.dmp
+*.diagsession
+*.psess
+*.vsp
+*.vspx
+*.sap

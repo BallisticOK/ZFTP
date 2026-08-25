@@ -118,53 +118,56 @@ public static class ProfileStore
         }).ToList();
 
         var json = JsonSerializer.Serialize(stored, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(FilePath, json);
+        AtomicFile.WriteAllText(FilePath, json);
     }
 
     public static List<ConnectionProfile> Load()
     {
-        if (!File.Exists(FilePath)) return new List<ConnectionProfile>();
-
-        try
+        foreach (var path in new[] { FilePath, FilePath + ".bak" })
         {
-            var stored = JsonSerializer.Deserialize<List<StoredProfile>>(File.ReadAllText(FilePath))
-                         ?? new List<StoredProfile>();
-
-            return stored.Select(s => new ConnectionProfile
+            if (!File.Exists(path)) continue;
+            try
             {
-                Id = string.IsNullOrEmpty(s.Id) ? Guid.NewGuid().ToString("N") : s.Id,
-                Name = s.Name,
-                Host = s.Host,
-                Port = s.Port,
-                Username = s.Username,
-                Auth = s.Auth,
-                Password = Decrypt(s.PasswordEnc),
-                KeyPath = s.KeyPath,
-                KeyPassphrase = Decrypt(s.KeyPassphraseEnc),
-                KnownHostKey = s.KnownHostKey,
-                DeviceSerial = s.DeviceSerial,
-                RemoteRoot = s.RemoteRoot,
-                DriveLetter = s.DriveLetter,
-                Enabled = s.Enabled,
-                AutoMount = s.AutoMount,
-                Access = s.Access,
-                Provider = s.Provider,
-                Color = string.IsNullOrWhiteSpace(s.Color) ? "#2D7DD2" : s.Color,
-                Url = s.Url,
-                S3AccessKey = s.S3AccessKey,
-                S3Secret = Decrypt(s.S3SecretEnc),
-                S3Region = s.S3Region,
-                S3Endpoint = s.S3Endpoint,
-                S3Bucket = s.S3Bucket,
-                ClientId = s.ClientId,
-                ClientSecret = Decrypt(s.ClientSecretEnc),
-            }).ToList();
+                var stored = JsonSerializer.Deserialize<List<StoredProfile>>(File.ReadAllText(path))
+                             ?? new List<StoredProfile>();
+
+                return stored.Select(s => new ConnectionProfile
+                {
+                    Id = string.IsNullOrEmpty(s.Id) ? Guid.NewGuid().ToString("N") : s.Id,
+                    Name = s.Name,
+                    Host = s.Host,
+                    Port = s.Port,
+                    Username = s.Username,
+                    Auth = s.Auth,
+                    Password = Decrypt(s.PasswordEnc),
+                    KeyPath = s.KeyPath,
+                    KeyPassphrase = Decrypt(s.KeyPassphraseEnc),
+                    KnownHostKey = s.KnownHostKey,
+                    DeviceSerial = s.DeviceSerial,
+                    RemoteRoot = s.RemoteRoot,
+                    DriveLetter = s.DriveLetter,
+                    Enabled = s.Enabled,
+                    AutoMount = s.AutoMount,
+                    Access = s.Access,
+                    Provider = s.Provider,
+                    Color = string.IsNullOrWhiteSpace(s.Color) ? "#2D7DD2" : s.Color,
+                    Url = s.Url,
+                    S3AccessKey = s.S3AccessKey,
+                    S3Secret = Decrypt(s.S3SecretEnc),
+                    S3Region = s.S3Region,
+                    S3Endpoint = s.S3Endpoint,
+                    S3Bucket = s.S3Bucket,
+                    ClientId = s.ClientId,
+                    ClientSecret = Decrypt(s.ClientSecretEnc),
+                }).ToList();
+            }
+            catch
+            {
+                // Try the .bak copy before giving up on the user's profiles.
+            }
         }
-        catch
-        {
-            // Corrupt/unreadable file — start fresh rather than crash.
-            return new List<ConnectionProfile>();
-        }
+
+        return new List<ConnectionProfile>();
     }
 
     private static string Encrypt(string plain)

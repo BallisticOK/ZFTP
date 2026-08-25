@@ -11,7 +11,7 @@ using Brushes = System.Windows.Media.Brushes;
 
 namespace ZFTP.App;
 
-public sealed class ServerItem : INotifyPropertyChanged
+public sealed class ServerItem : INotifyPropertyChanged, IDisposable
 {
     public ConnectionProfile Profile { get; }
     public MountSession Session { get; }
@@ -125,4 +125,6 @@ public sealed class ServerItem : INotifyPropertyChanged
         else
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
+
+    public void Dispose() => Session.Dispose();
 }

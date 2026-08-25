@@ -12,11 +12,11 @@ using System.Reflection;
 
 [assembly: System.Reflection.AssemblyCompanyAttribute("ZFTP")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
-[assembly: System.Reflection.AssemblyFileVersionAttribute("2.3.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("2.3.0")]
+[assembly: System.Reflection.AssemblyFileVersionAttribute("2.6.1.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("2.6.1+562d412f9f50aa148093d88f5c264d7256869005")]
 [assembly: System.Reflection.AssemblyProductAttribute("ZFTP")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ZFTP")]
-[assembly: System.Reflection.AssemblyVersionAttribute("2.3.0.0")]
+[assembly: System.Reflection.AssemblyVersionAttribute("2.6.1.0")]
 [assembly: System.Runtime.Versioning.TargetPlatformAttribute("Windows7.0")]
 [assembly: System.Runtime.Versioning.SupportedOSPlatformAttribute("Windows7.0")]
 
