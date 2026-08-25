@@ -14,9 +14,9 @@
     <Platforms>x64</Platforms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>zftp.ico</ApplicationIcon>
-    <Version>2.7.2</Version>
-    <FileVersion>2.7.2.0</FileVersion>
-    <AssemblyVersion>2.7.2.0</AssemblyVersion>
+    <Version>2.7.4</Version>
+    <FileVersion>2.7.4.0</FileVersion>
+    <AssemblyVersion>2.7.4.0</AssemblyVersion>
     <Company>ZFTP</Company>
     <Product>ZFTP</Product>
   </PropertyGroup>

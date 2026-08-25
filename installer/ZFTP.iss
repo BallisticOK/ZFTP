@@ -7,15 +7,16 @@
 ; ============================================================================
 
 #define MyAppName "ZFTP"
-#define MyAppVersion "2.7.2"
+#define MyAppVersion "2.7.4"
 #define MyAppPublisher "ZFTP"
 #define MyAppExeName "ZFTP.exe"
 #define MyUpdaterExe "ZFTP.Updater.exe"
 
-#define PublishDir "E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish"
-#define IconFile   "E:\SFTP Net Drive\ZFTP\src\ZFTP.App\zftp.ico"
-#define WinFspMsi  "E:\SFTP Net Drive\_setup\winfsp-2.1.25156.msi"
-#define DotNetExe  "E:\SFTP Net Drive\_setup\windowsdesktop-runtime-8-x64.exe"
+#define ProjectDir SourcePath + ".."
+#define PublishDir ProjectDir + "\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish"
+#define IconFile   ProjectDir + "\src\ZFTP.App\zftp.ico"
+#define WinFspMsi  SourcePath + "prereqs\winfsp-x64.msi"
+#define DotNetExe  SourcePath + "prereqs\windowsdesktop-runtime-8-x64.exe"
 
 [Setup]
 AppId={{B7E1F3A2-9C4D-4E6F-8A1B-2C3D4E5F6071}
@@ -25,7 +26,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-OutputDir=E:\SFTP Net Drive\ZFTP\dist
+OutputDir={#ProjectDir}\dist
 OutputBaseFilename=ZFTP-Setup-{#MyAppVersion}
 SetupIconFile={#IconFile}
 UninstallDisplayIcon={app}\{#MyAppExeName}

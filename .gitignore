@@ -18,6 +18,9 @@ artifacts/
 
 # Published / packaged output
 /dist/
+/installer/prereqs/
+/installer/tools/
+/installer/build/
 **/publish/
 *.zip
 *.nupkg

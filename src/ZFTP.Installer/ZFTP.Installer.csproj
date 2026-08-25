@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>ZFTP-Setup</AssemblyName>
+    <RootNamespace>ZFTP.Installer</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+    <Platforms>x64</Platforms>
+    <ApplicationIcon>..\ZFTP.App\zftp.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>2.7.4</Version>
+    <FileVersion>2.7.4.0</FileVersion>
+    <AssemblyVersion>2.7.4.0</AssemblyVersion>
+    <Company>ZFTP</Company>
+    <Product>ZFTP Installer</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="..\ZFTP.App\Assets\logo.png" Link="Assets\logo.png" />
+    <Resource Include="..\ZFTP.App\zftp.ico" Link="Assets\zftp.ico" />
+
+    <EmbeddedResource Include="..\..\installer\build\payload.zip"
+                      Condition="'$(InstallerFlavor)' != 'UninstallOnly' And Exists('..\..\installer\build\payload.zip')"
+                      LogicalName="ZFTP.Payload.zip" />
+    <EmbeddedResource Include="..\..\installer\prereqs\winfsp-x64.msi"
+                      Condition="'$(InstallerFlavor)' != 'UninstallOnly' And Exists('..\..\installer\prereqs\winfsp-x64.msi')"
+                      LogicalName="ZFTP.WinFsp.msi" />
+    <EmbeddedResource Include="..\..\installer\prereqs\windowsdesktop-runtime-8-x64.exe"
+                      Condition="'$(InstallerFlavor)' != 'UninstallOnly' And Exists('..\..\installer\prereqs\windowsdesktop-runtime-8-x64.exe')"
+                      LogicalName="ZFTP.DotNetDesktop.exe" />
+  </ItemGroup>
+
+  <Target Name="RequireInstallerPayload" BeforeTargets="Publish" Condition="'$(InstallerFlavor)' != 'UninstallOnly'">
+    <Error Condition="!Exists('..\..\installer\build\payload.zip')"
+           Text="Installer payload is missing. Run installer\build-installer.ps1 from the repository root." />
+    <Error Condition="!Exists('..\..\installer\prereqs\winfsp-x64.msi')"
+           Text="WinFsp prerequisite is missing. Run installer\build-installer.ps1 from the repository root." />
+    <Error Condition="!Exists('..\..\installer\prereqs\windowsdesktop-runtime-8-x64.exe')"
+           Text=".NET Desktop Runtime prerequisite is missing. Run installer\build-installer.ps1 from the repository root." />
+  </Target>
+
+</Project>
