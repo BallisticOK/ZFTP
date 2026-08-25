@@ -98,11 +98,19 @@ public static class RcloneService
     /// </summary>
     public static void CleanupStaleProcesses()
     {
-        if (!Available) return;
+        if (!Available)
+        {
+            AppLog.Warn("rclone", $"Bundled rclone was not found at {RclonePath}.");
+            return;
+        }
 
         string ours;
         try { ours = Path.GetFullPath(RclonePath); }
-        catch { return; }
+        catch (Exception ex)
+        {
+            AppLog.Error("rclone", "Could not resolve the bundled rclone path.", ex);
+            return;
+        }
 
         foreach (var process in Process.GetProcessesByName("rclone"))
         {
@@ -112,13 +120,15 @@ public static class RcloneService
                 if (string.IsNullOrWhiteSpace(path)) continue;
                 if (!Path.GetFullPath(path).Equals(ours, StringComparison.OrdinalIgnoreCase)) continue;
 
+                AppLog.Warn("rclone", $"Stopping stale bundled rclone process PID {process.Id}.");
                 process.Kill(entireProcessTree: true);
                 process.WaitForExit(3000);
             }
-            catch
+            catch (Exception ex)
             {
                 // Best effort. A protected/elevated process may be unreadable;
                 // normal mount diagnostics will still report the occupied letter.
+                AppLog.Warn("rclone", $"Could not inspect/stop stale process PID {process.Id}: {ex.Message}");
             }
             finally
             {
@@ -498,6 +508,7 @@ public static class RcloneService
     public static Process Mount(ConnectionProfile p, string mountPoint)
     {
         bool poll = SupportsPolling(p.Provider);
+        AppLog.Info("rclone", $"Starting {p.Provider} mount for profile '{p.Name}' on {mountPoint}.");
 
         var args = new List<string>
         {
@@ -537,6 +548,10 @@ public static class RcloneService
             // More parallelism for copies, metadata checks, and the warm-up below.
             "--transfers", "8",
             "--checkers", "32",
+
+            // INFO gives us enough startup/mount detail to diagnose WinFsp and
+            // provider failures. Output is drained into zftp.log below.
+            "--log-level", "INFO",
 
             "--no-console",
         };
@@ -594,6 +609,8 @@ public static class RcloneService
     {
         var p = new Process { StartInfo = Psi(args, hidden) };
         p.Start();
+        var pid = p.Id;
+        AppLog.Info("rclone", $"Started PID {pid}.");
         AttachToLifetimeJob(p);
 
         // A long-lived mount must continuously drain redirected pipes. If nobody
@@ -606,8 +623,10 @@ public static class RcloneService
             void Capture(string? line)
             {
                 if (string.IsNullOrWhiteSpace(line)) return;
-                lines.Enqueue(line.Trim());
+                var text = line.Trim();
+                lines.Enqueue(text);
                 while (lines.Count > 100 && lines.TryDequeue(out _)) { }
+                AppLog.Info($"rclone:{pid}", text);
             }
 
             p.ErrorDataReceived += (_, e) => Capture(e.Data);

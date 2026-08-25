@@ -8,6 +8,8 @@
 
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
 using Fsp;
 using Renci.SshNet;
 
@@ -24,6 +26,9 @@ public enum MountState
 
 public sealed class MountSession : IDisposable
 {
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint QueryDosDevice(string lpDeviceName, StringBuilder lpTargetPath, int ucchMax);
+
     public ConnectionProfile Profile { get; }
     public MountState State { get; private set; } = MountState.Disconnected;
     public string? LastError { get; private set; }
@@ -73,14 +78,18 @@ public sealed class MountSession : IDisposable
             _busy = true;
             try
             {
+                AppLog.Info("Mount", $"Mount requested: profile='{Profile.Name}', provider={Profile.Provider}, drive={Profile.DriveLetter}.");
+
                 // Make sure WinFsp's native DLL is loaded before any Fsp type is used.
                 WinFspNative.EnsureLoaded();
                 if (!WinFspNative.Available)
                     throw new InvalidOperationException(
                         "WinFsp is not installed. ZFTP needs WinFsp to create drive letters. " +
-                        "Reinstall ZFTP (the installer includes WinFsp) or install it from winfsp.dev.");
+                        "Reinstall ZFTP (the installer includes WinFsp) or install it from winfsp.dev. " +
+                        (string.IsNullOrWhiteSpace(WinFspNative.LastError) ? "" : WinFspNative.LastError));
 
                 MountPoint = Profile.DriveLetter.TrimEnd(':', '\\') + ":";
+                WaitForMountPointFree();
 
                 // SFTP and Android use our native engines; every other provider goes through rclone.
                 return Profile.Provider switch
@@ -94,6 +103,7 @@ public sealed class MountSession : IDisposable
             catch (Exception ex)
             {
                 LastError = ex.Message;
+                AppLog.Error("Mount", $"Mount failed for profile '{Profile.Name}' on {MountPoint}.", ex);
                 Cleanup();
                 SetState(MountState.Error);
                 return false;
@@ -135,9 +145,11 @@ public sealed class MountSession : IDisposable
                 _busy = true;
                 try
                 {
+                    AppLog.Warn("Watchdog", $"Mount for '{Profile.Name}' appears to be down; attempting reconnect.");
                     SetState(MountState.Reconnecting);
                     Cleanup();   // free the drive letter from the dead mount
                     MountPoint = Profile.DriveLetter.TrimEnd(':', '\\') + ":";
+                    WaitForMountPointFree();
                     bool ok = Profile.Provider switch
                     {
                         ProviderType.Sftp => MountSftp(),
@@ -147,7 +159,11 @@ public sealed class MountSession : IDisposable
                     };
                     if (!ok && _shouldBeMounted) SetState(MountState.Reconnecting);
                 }
-                catch { if (_shouldBeMounted) SetState(MountState.Reconnecting); }
+                catch (Exception ex)
+                {
+                    AppLog.Error("Watchdog", $"Reconnect failed for '{Profile.Name}'.", ex);
+                    if (_shouldBeMounted) SetState(MountState.Reconnecting);
+                }
                 finally { _busy = false; }
             }
         }
@@ -162,11 +178,6 @@ public sealed class MountSession : IDisposable
             throw new InvalidOperationException("The rclone engine wasn't found. Reinstall ZFTP.");
 
         SetState(MountState.Connecting);
-
-        if (MountPointInUse())
-            throw new InvalidOperationException(
-                $"Drive {MountPoint} is already in use. ZFTP now clears its own stale rclone mounts on startup; " +
-                "if this keeps happening, choose another drive letter or close the program currently using it.");
 
         // Credential backends are configured here; OAuth ones must already be
         // authorized (the Edit dialog runs the browser sign-in once).
@@ -195,6 +206,7 @@ public sealed class MountSession : IDisposable
                 LastError = null;
                 _shouldBeMounted = true;
                 SetState(MountState.Mounted);
+                AppLog.Info("Mount", $"rclone drive {MountPoint} is visible and mounted for '{Profile.Name}'.");
                 return true;
             }
             System.Threading.Thread.Sleep(400);
@@ -209,10 +221,54 @@ public sealed class MountSession : IDisposable
         try
         {
             var letter = char.ToUpperInvariant(Profile.DriveLetter.TrimEnd(':', '\\')[0]);
-            return DriveInfo.GetDrives().Any(d =>
-                d.Name.Length > 0 && char.ToUpperInvariant(d.Name[0]) == letter);
+            if (DriveInfo.GetDrives().Any(d => d.Name.Length > 0 && char.ToUpperInvariant(d.Name[0]) == letter))
+                return true;
+
+            // QueryDosDevice also catches SUBST drives and some mapped/disconnected
+            // letters that can be absent from DriveInfo.GetDrives() on Windows 11.
+            var target = new StringBuilder(1024);
+            return QueryDosDevice($"{letter}:", target, target.Capacity) != 0;
         }
         catch { return false; }
+    }
+
+    private void WaitForMountPointFree()
+    {
+        if (!MountPointInUse()) return;
+
+        AppLog.Warn("Mount", $"Drive {MountPoint} is still in use; waiting for Windows to release it.");
+        var sw = Stopwatch.StartNew();
+        while (sw.Elapsed < TimeSpan.FromSeconds(5))
+        {
+            System.Threading.Thread.Sleep(250);
+            if (!MountPointInUse())
+            {
+                AppLog.Info("Mount", $"Drive {MountPoint} was released after {sw.ElapsedMilliseconds} ms.");
+                return;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Drive {MountPoint} is already in use. Windows did not release the letter after 5 seconds. " +
+            "Choose another drive letter or close/disconnect the program currently using it.");
+    }
+
+    private void VerifyNativeMountVisible()
+    {
+        var sw = Stopwatch.StartNew();
+        while (sw.Elapsed < TimeSpan.FromSeconds(5))
+        {
+            if (MountPointReady())
+            {
+                AppLog.Info("Mount", $"WinFsp drive {MountPoint} became visible after {sw.ElapsedMilliseconds} ms.");
+                return;
+            }
+            System.Threading.Thread.Sleep(100);
+        }
+
+        throw new InvalidOperationException(
+            $"WinFsp reported success, but Windows did not publish drive {MountPoint} within 5 seconds. " +
+            $"See {AppLog.LogPath} for diagnostics.");
     }
 
     private bool MountPointReady()
@@ -319,6 +375,8 @@ public sealed class MountSession : IDisposable
                     "Is the drive letter already in use?");
             }
 
+            VerifyNativeMountVisible();
+
             LastError = null;
             _shouldBeMounted = true;
             SetState(MountState.Mounted);
@@ -339,6 +397,7 @@ public sealed class MountSession : IDisposable
         catch (Exception ex)
         {
             LastError = ex.Message;
+            AppLog.Error("Mount:Android", $"Android mount failed for '{Profile.Name}' on {MountPoint}.", ex);
             Cleanup();
             SetState(MountState.Error);
             return false;
@@ -414,6 +473,8 @@ public sealed class MountSession : IDisposable
                     "Is the drive letter already in use?");
             }
 
+            VerifyNativeMountVisible();
+
             LastError = null;
             _shouldBeMounted = true;
             SetState(MountState.Mounted);
@@ -422,6 +483,7 @@ public sealed class MountSession : IDisposable
         catch (Exception ex)
         {
             LastError = ex.Message;
+            AppLog.Error("Mount:Apple", $"Apple mount failed for '{Profile.Name}' on {MountPoint}.", ex);
             Cleanup();
             SetState(MountState.Error);
             return false;
@@ -523,6 +585,8 @@ public sealed class MountSession : IDisposable
                     "Is the drive letter already in use?");
             }
 
+            VerifyNativeMountVisible();
+
             LastError = null;
             _shouldBeMounted = true;
             SetState(MountState.Mounted);
@@ -536,6 +600,7 @@ public sealed class MountSession : IDisposable
         catch (Exception ex)
         {
             LastError = ex.Message;
+            AppLog.Error("Mount:SFTP", $"SFTP mount failed for '{Profile.Name}' on {MountPoint}.", ex);
             Cleanup();
             SetState(MountState.Error);
             return false;
@@ -547,6 +612,7 @@ public sealed class MountSession : IDisposable
         lock (_sync)
         {
             _shouldBeMounted = false;   // stop the watchdog from remounting
+            AppLog.Info("Mount", $"Unmount requested for '{Profile.Name}' on {MountPoint}.");
             Cleanup();
             SetState(MountState.Disconnected);
         }
@@ -554,6 +620,7 @@ public sealed class MountSession : IDisposable
 
     private void Cleanup()
     {
+        AppLog.Info("Mount", $"Cleaning up mount resources for '{Profile.Name}' on {MountPoint}.");
         // native SFTP / Android share the WinFsp host
         try { _host?.Unmount(); } catch { /* ignore */ }
         try { _client?.Disconnect(); } catch { /* ignore */ }
@@ -623,6 +690,8 @@ public sealed class MountSession : IDisposable
 
     private void SetState(MountState state)
     {
+        if (State != state)
+            AppLog.Info("Mount", $"'{Profile.Name}' ({MountPoint}) state: {State} -> {state}.");
         State = state;
         StateChanged?.Invoke(this);
     }

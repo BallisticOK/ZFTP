@@ -21,6 +21,7 @@ public static class WinFspNative
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern IntPtr LoadLibraryW(string lpFileName);
 
+    private static readonly object Sync = new();
     private static bool _done;
 
     /// <summary>True if WinFsp is installed and its native DLL was loaded.</summary>
@@ -29,23 +30,53 @@ public static class WinFspNative
     /// <summary>Where WinFsp is installed, or null if not found.</summary>
     public static string? InstallDir { get; private set; }
 
+    /// <summary>Diagnostic detail from the last WinFsp discovery/load attempt.</summary>
+    public static string? LastError { get; private set; }
+
     public static void EnsureLoaded()
     {
-        if (_done) return;
-        _done = true;
-
-        try
+        lock (Sync)
         {
-            InstallDir = FindInstallDir();
-            if (string.IsNullOrEmpty(InstallDir)) return;
+            if (_done) return;
+            _done = true;
 
-            var dll = Path.Combine(InstallDir, "bin", IntPtr.Size == 8 ? "winfsp-x64.dll" : "winfsp-x86.dll");
-            if (File.Exists(dll) && LoadLibraryW(dll) != IntPtr.Zero)
+            try
+            {
+                InstallDir = FindInstallDir();
+                if (string.IsNullOrEmpty(InstallDir))
+                {
+                    LastError = "WinFsp install directory was not found in the registry or standard install folders.";
+                    AppLog.Error("WinFsp", LastError);
+                    return;
+                }
+
+                var dll = Path.Combine(InstallDir, "bin", IntPtr.Size == 8 ? "winfsp-x64.dll" : "winfsp-x86.dll");
+                if (!File.Exists(dll))
+                {
+                    LastError = $"WinFsp native DLL was not found at {dll}.";
+                    AppLog.Error("WinFsp", LastError);
+                    return;
+                }
+
+                var handle = LoadLibraryW(dll);
+                if (handle == IntPtr.Zero)
+                {
+                    var code = Marshal.GetLastWin32Error();
+                    LastError = $"LoadLibrary failed for {dll} with Win32 error {code}.";
+                    AppLog.Error("WinFsp", LastError);
+                    return;
+                }
+
                 Available = true;
-        }
-        catch
-        {
-            // Leave Available = false; the app will report a friendly error.
+                LastError = null;
+                AppLog.Info("WinFsp", $"Loaded native library from {dll}.");
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                AppLog.Error("WinFsp", "Unexpected error while loading WinFsp.", ex);
+                // Leave Available = false; the app will report a friendly error.
+            }
         }
     }
 
@@ -63,6 +94,21 @@ public static class WinFspNative
             }
             catch { /* try next view */ }
         }
+
+        // Some WinFsp installs can be present even when the registry entry is
+        // unavailable to the current process. Fall back to the normal locations.
+        foreach (var baseDir in new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+        })
+        {
+            if (string.IsNullOrWhiteSpace(baseDir)) continue;
+            var candidate = Path.Combine(baseDir, "WinFsp");
+            var dll = Path.Combine(candidate, "bin", IntPtr.Size == 8 ? "winfsp-x64.dll" : "winfsp-x86.dll");
+            if (File.Exists(dll)) return candidate;
+        }
+
         return null;
     }
 }

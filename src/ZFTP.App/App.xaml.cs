@@ -32,6 +32,9 @@ public partial class App : Application
 
         _ownsSingleInstance = true;
 
+        AppLog.Initialize();
+        AppLog.Info("App", "Primary application instance acquired.");
+
         // Load WinFsp's native DLL up front so mounting works even when ZFTP is
         // published as a self-contained app, and move any old ProgramData config
         // into the current per-user AppData\ZFTP folder.
@@ -44,15 +47,19 @@ public partial class App : Application
         // startup; newly-started children are also placed in a kill-on-close job.
         RcloneService.CleanupStaleProcesses();
 
-        // Safety net + crash logging so we can see what's going wrong.
-        var log = System.IO.Path.Combine(ProfileStore.FolderPath, "crash.log");
-        void Write(string where, object? ex)
+        // Keep unhandled failures in the same .log file as mount diagnostics.
+        DispatcherUnhandledException += (_, ex) =>
         {
-            try { System.IO.File.AppendAllText(log, $"[{where}] {DateTime.Now:HH:mm:ss}\n{ex}\n\n"); } catch { }
-        }
-        DispatcherUnhandledException += (_, ex) => { Write("Dispatcher", ex.Exception); ex.Handled = true; };
-        AppDomain.CurrentDomain.UnhandledException += (_, ex) => Write("AppDomain", ex.ExceptionObject);
-        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, ex) => { Write("Task", ex.Exception); ex.SetObserved(); };
+            AppLog.Error("Dispatcher", "Unhandled UI exception.", ex.Exception);
+            ex.Handled = true;
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, ex) =>
+            AppLog.Error("AppDomain", $"Unhandled application-domain exception: {ex.ExceptionObject}");
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, ex) =>
+        {
+            AppLog.Error("TaskScheduler", "Unobserved task exception.", ex.Exception);
+            ex.SetObserved();
+        };
 
         StartHidden = e.Args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
         base.OnStartup(e);
@@ -60,6 +67,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        AppLog.Info("App", $"Application exiting with code {e.ApplicationExitCode}.");
         if (_ownsSingleInstance)
             _singleInstance?.ReleaseMutex();
         _singleInstance?.Dispose();

@@ -283,6 +283,11 @@ graph TD
 
 Then open ZFTP → **New** → fill in your storage → **Connect**. Done.
 
+If a drive does not appear, ZFTP writes detailed mount diagnostics to
+`%AppData%\ZFTP\zftp.log`. The log includes WinFsp discovery/loading, drive-letter
+availability, mount state changes, rclone output, reconnect attempts, and unhandled
+application errors. It rotates at 5 MB to `zftp.previous.log`.
+
 > [!TIP]
 > For **iPhone/iPad** drives, install **Apple Devices** (or iTunes) once so Windows has the USB driver, then unlock the phone and tap **Trust This Computer**.
 
