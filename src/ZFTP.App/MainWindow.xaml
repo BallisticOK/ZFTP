@@ -3,12 +3,23 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:local="clr-namespace:ZFTP.App"
-        Title="ZFTP" Height="620" Width="1040"
-        MinHeight="520" MinWidth="900"
+        Title="ZFTP" Height="700" Width="1120"
+        MinHeight="560" MinWidth="900"
         Icon="/Assets/logo.png"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica"
+        Background="{DynamicResource ZftpWindowBackgroundBrush}"
+        Foreground="{DynamicResource ZftpTextBrush}"
+        FontFamily="{DynamicResource ZftpThemeFontFamily}"
         WindowStartupLocation="CenterScreen">
+
+    <ui:FluentWindow.Resources>
+        <Style TargetType="{x:Type ui:Card}">
+            <Setter Property="Background" Value="{DynamicResource ZftpSurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ZftpBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+    </ui:FluentWindow.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -35,16 +46,17 @@
                     </Grid.RowDefinitions>
 
                     <!-- toolbar -->
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                    <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
                         <ui:Button Content="Mount all" Appearance="Primary"
                                    Icon="{ui:SymbolIcon Play24}" Click="MountAll_Click" />
                         <ui:Button Content="Unmount all" Margin="8,0,0,0"
                                    Icon="{ui:SymbolIcon Stop24}" Click="UnmountAll_Click" />
                         <ui:Button Content="Save" Margin="8,0,0,0"
                                    Icon="{ui:SymbolIcon Save24}" Click="Save_Click" />
-                    </StackPanel>
+                    </WrapPanel>
 
                     <TextBlock Grid.Row="1" Margin="2,0,0,8" Opacity="0.75"
+                               TextWrapping="Wrap"
                                Text="Add, edit, enable and mount your SFTP drives. Each drive appears in Explorer under the name you give it." />
 
                     <!-- grid + side buttons -->
@@ -54,8 +66,9 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" CornerRadius="10" Background="#14FFFFFF"
-                                BorderBrush="#1FFFFFFF" BorderThickness="1">
+                        <Border Grid.Column="0" CornerRadius="{DynamicResource ZftpCornerRadius}"
+                                Background="{DynamicResource ZftpSurfaceBrush}"
+                                BorderBrush="{DynamicResource ZftpBorderBrush}" BorderThickness="1">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
@@ -81,7 +94,7 @@
                                     <TextBlock Grid.Column="5" Text="ON" FontSize="11" FontWeight="SemiBold" Opacity="0.55" HorizontalAlignment="Center" />
                                     <TextBlock Grid.Column="6" Text="STATUS" FontSize="11" FontWeight="SemiBold" Opacity="0.55" />
                                 </Grid>
-                                <Border Grid.Row="1" Height="1" Background="#18FFFFFF" Margin="14,0" />
+                                <Border Grid.Row="1" Height="1" Background="{DynamicResource ZftpBorderBrush}" Margin="14,0" />
 
                                 <ListBox x:Name="DrivesList" Grid.Row="2"
                                          Background="Transparent" BorderThickness="0" Padding="6,6"
@@ -96,7 +109,7 @@
                                             <Setter Property="Template">
                                                 <Setter.Value>
                                                     <ControlTemplate TargetType="ListBoxItem">
-                                                        <Border x:Name="Bd" CornerRadius="8" Background="Transparent" Padding="10,0">
+                                                        <Border x:Name="Bd" CornerRadius="{DynamicResource ZftpSmallCornerRadius}" Background="Transparent" Padding="10,0">
                                                             <Grid>
                                                                 <Border x:Name="Accent" Width="3" HorizontalAlignment="Left"
                                                                         CornerRadius="2" Margin="-6,8" Background="Transparent" />
@@ -105,11 +118,11 @@
                                                         </Border>
                                                         <ControlTemplate.Triggers>
                                                             <Trigger Property="IsMouseOver" Value="True">
-                                                                <Setter TargetName="Bd" Property="Background" Value="#1EFFFFFF" />
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ZftpHoverBrush}" />
                                                             </Trigger>
                                                             <Trigger Property="IsSelected" Value="True">
-                                                                <Setter TargetName="Bd" Property="Background" Value="#382D7DD2" />
-                                                                <Setter TargetName="Accent" Property="Background" Value="#5BA8F0" />
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ZftpSelectionBrush}" />
+                                                                <Setter TargetName="Accent" Property="Background" Value="{DynamicResource ZftpAccentBrush}" />
                                                             </Trigger>
                                                         </ControlTemplate.Triggers>
                                                     </ControlTemplate>
@@ -119,7 +132,7 @@
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
-                                            <Grid Height="48">
+                                            <Grid Height="{DynamicResource ZftpRowHeight}">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="30" />
                                                     <ColumnDefinition Width="1.3*" />
@@ -141,7 +154,7 @@
                                                                Opacity="0.6" />
                                                 </StackPanel>
 
-                                                <Border Grid.Column="2" Background="#2A6CB0FF" CornerRadius="5"
+                                                <Border Grid.Column="2" Background="{DynamicResource ZftpBadgeBrush}" CornerRadius="{DynamicResource ZftpSmallCornerRadius}"
                                                         Padding="8,3" HorizontalAlignment="Left" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding DriveLabel}" FontWeight="SemiBold" FontSize="12" />
                                                 </Border>
@@ -195,36 +208,48 @@
 
                         <ui:Card Margin="0,0,0,10" Padding="16,14">
                             <Grid VerticalAlignment="Center">
-                                <StackPanel VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Start ZFTP with Windows" FontWeight="SemiBold" />
                                     <TextBlock Text="Launch automatically when you log into Windows."
-                                               Opacity="0.7" FontSize="12" />
+                                               Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                                 </StackPanel>
-                                <ui:ToggleSwitch x:Name="StartWithWindowsToggle" HorizontalAlignment="Right"
+                                <ui:ToggleSwitch Grid.Column="1" x:Name="StartWithWindowsToggle" HorizontalAlignment="Right"
                                                  VerticalAlignment="Center" Click="StartWithWindows_Toggled" />
                             </Grid>
                         </ui:Card>
 
                         <ui:Card Margin="0,0,0,10" Padding="16,14">
                             <Grid VerticalAlignment="Center">
-                                <StackPanel VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Start in the system tray" FontWeight="SemiBold" />
                                     <TextBlock Text="Open hidden in the tray instead of showing the window."
-                                               Opacity="0.7" FontSize="12" />
+                                               Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                                 </StackPanel>
-                                <ui:ToggleSwitch x:Name="StartMinimizedToggle" HorizontalAlignment="Right"
+                                <ui:ToggleSwitch Grid.Column="1" x:Name="StartMinimizedToggle" HorizontalAlignment="Right"
                                                  VerticalAlignment="Center" Click="StartMinimized_Toggled" />
                             </Grid>
                         </ui:Card>
 
                         <ui:Card Margin="0,0,0,10" Padding="16,14">
                             <Grid VerticalAlignment="Center">
-                                <StackPanel VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Keep running in tray when window is closed" FontWeight="SemiBold" />
                                     <TextBlock Text="Closing the window hides it to the tray (drives stay mounted). Turn off to fully quit on close."
                                                Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                                 </StackPanel>
-                                <ui:ToggleSwitch x:Name="TrayOnCloseToggle" HorizontalAlignment="Right"
+                                <ui:ToggleSwitch Grid.Column="1" x:Name="TrayOnCloseToggle" HorizontalAlignment="Right"
                                                  VerticalAlignment="Center" Click="TrayOnClose_Toggled" />
                             </Grid>
                         </ui:Card>
@@ -233,12 +258,16 @@
 
                         <ui:Card Margin="0,0,0,10" Padding="16,14">
                             <Grid VerticalAlignment="Center">
-                                <StackPanel VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Auto-mount drives on startup" FontWeight="SemiBold" />
                                     <TextBlock Text="When ZFTP starts, mount every enabled drive that has Auto-mount turned on (set per drive in its Edit dialog)."
                                                Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                                 </StackPanel>
-                                <ui:ToggleSwitch x:Name="AutoMountToggle" HorizontalAlignment="Right"
+                                <ui:ToggleSwitch Grid.Column="1" x:Name="AutoMountToggle" HorizontalAlignment="Right"
                                                  VerticalAlignment="Center" Click="AutoMountOnStart_Toggled" />
                             </Grid>
                         </ui:Card>
@@ -247,13 +276,36 @@
 
                         <ui:Card Margin="0,0,0,10" Padding="16,14">
                             <Grid VerticalAlignment="Center">
-                                <StackPanel VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Theme" FontWeight="SemiBold" />
-                                    <TextBlock Text="Switch between the dark and light look." Opacity="0.7" FontSize="12" />
+                                    <TextBlock x:Name="ThemeDescriptionText" Text="Built-in and local community themes." Opacity="0.7" FontSize="12" TextWrapping="Wrap" MaxWidth="390" />
                                 </StackPanel>
-                                <ComboBox x:Name="ThemeCombo" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                          MinWidth="170" SelectionChanged="Theme_Changed" />
+                                <ComboBox Grid.Column="1" x:Name="ThemeCombo" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          MinWidth="220" DisplayMemberPath="Name" SelectionChanged="Theme_Changed" />
                                 <!-- Items are populated in code from the theme list. -->
+                            </Grid>
+                        </ui:Card>
+
+                        <ui:Card Margin="0,0,0,10" Padding="16,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                    <TextBlock Text="Community themes" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="ThemeSourceText"
+                                               Text="Drop .json themes into your local Themes folder. ZFTP watches it automatically."
+                                               Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <ui:Button Content="Open folder" Margin="0,0,8,0" Click="OpenThemesFolder_Click" />
+                                    <ui:Button Content="Reload themes" Click="ReloadThemes_Click" />
+                                </StackPanel>
                             </Grid>
                         </ui:Card>
 
@@ -261,12 +313,16 @@
 
                         <ui:Card Margin="0,0,0,10" Padding="16,14">
                             <Grid VerticalAlignment="Center">
-                                <StackPanel VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock x:Name="VersionText" Text="ZFTP version 0.1.0" FontWeight="SemiBold" />
                                     <TextBlock x:Name="UpdateStatusText" Text="Check for a newer version of ZFTP."
                                                Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
                                 </StackPanel>
-                                <ui:Button x:Name="CheckUpdateButton" Content="Check for updates"
+                                <ui:Button Grid.Column="1" x:Name="CheckUpdateButton" Content="Check for updates"
                                            HorizontalAlignment="Right" VerticalAlignment="Center"
                                            Icon="{ui:SymbolIcon ArrowSync24}" Click="CheckUpdate_Click" />
                             </Grid>
@@ -284,7 +340,7 @@
         </TabControl>
 
         <!-- ====================== STATUS BAR ====================== -->
-        <Border Grid.Row="2" Background="#22000000" Padding="12,6">
+        <Border Grid.Row="2" Background="{DynamicResource ZftpStatusBarBrush}" Padding="12,6">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -296,7 +352,8 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse x:Name="GlobalStatusDot" Width="9" Height="9" Fill="Gray"
                              VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <TextBlock x:Name="GlobalStatusText" Text="Idle — no drives mounted" VerticalAlignment="Center" />
+                    <TextBlock x:Name="GlobalStatusText" Text="Idle — no drives mounted" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" MaxWidth="300" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">

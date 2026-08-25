@@ -12,7 +12,7 @@
 
 <br/>
 
-[![version](https://img.shields.io/badge/version-2.6.1-2D7DD2?style=for-the-badge)](https://github.com/BallisticOK/ZFTP/releases)
+[![version](https://img.shields.io/badge/version-2.7.4-2D7DD2?style=for-the-badge)](https://github.com/BallisticOK/ZFTP/releases)
 [![platform](https://img.shields.io/badge/Windows%2010%20%2F%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/BallisticOK/ZFTP/releases)
 [![.NET 8](https://img.shields.io/badge/.NET%208%20%2B%20WPF-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![price](https://img.shields.io/badge/price-%240.00%20forever-22C55E?style=for-the-badge)](#-why-it-exists)
@@ -68,7 +68,7 @@ It started as an SFTP tool. It now mounts **eleven kinds of storage** through on
 - **Self-healing** — a watchdog silently remounts after sleep, Wi-Fi drops, or a phone reconnect
 - **System tray** — closing the window keeps drives mounted
 - **Built-in updater** from GitHub Releases / CDN
-- **10 themes**, dark and light, with accent colours
+- **16 built-in themes + local community themes** — palettes, fonts, density, corners and glass/no-glass backdrops ([theme guide](docs/themes.md))
 
 </td>
 </tr>
@@ -309,20 +309,16 @@ dotnet run --project src/ZFTP.App
 
 <br/>
 
-The bundled engines (`rclone.exe`, `adb.exe` + USB DLLs) ship in `src/ZFTP.App/tools/`; the Apple libraries come from the `imobiledevice-net` NuGet package automatically.
+The bundled engines (`rclone.exe`, `adb.exe` + USB DLLs) ship in `src/ZFTP.App/tools/`; the Apple libraries come from the `imobiledevice-net` NuGet package automatically. ZFTP now ships its own WPF bootstrapper instead of the stock Inno Setup wizard.
 
-```bash
-# 1) publish the app (framework-dependent, win-x64)
-dotnet publish src/ZFTP.App/ZFTP.App.csproj -c Release -r win-x64 --self-contained false -o <pub>
-
-# 2) publish the updater into the SAME folder
-dotnet publish src/ZFTP.Updater/ZFTP.Updater.csproj -c Release -r win-x64 --self-contained false -o <pub>
-
-# 3) compile the installer (Inno Setup)
-ISCC.exe installer/ZFTP.iss
+```powershell
+# Publishes the app + updater, verifies/downloads prerequisites,
+# builds the branded uninstall helper, packs the payload, then emits
+# a self-contained custom setup executable.
+./installer/build-installer.ps1
 ```
 
-Output lands in `dist/ZFTP-Setup-<version>.exe`.
+Output lands in `dist/ZFTP-Setup-<version>.exe`. The installer embeds WinFsp and the .NET 8 Desktop Runtime and only installs either prerequisite when it is missing.
 
 </details>
 

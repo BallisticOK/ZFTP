@@ -68,6 +68,11 @@ public sealed class MountSession : IDisposable
     {
         lock (_sync)
         {
+            // Repeated clicks (or a tray/startup mount racing a UI click) should
+            // not tear down and recreate a drive that is already healthy.
+            if (State == MountState.Mounted)
+                return true;
+
             _busy = true;
             try
             {

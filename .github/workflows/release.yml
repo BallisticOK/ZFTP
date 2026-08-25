@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like "v2.6.2" to build the installer and publish a GitHub Release
+# Push a tag like "v2.7.4" to build the installer and publish a GitHub Release
 # with it attached, with release notes generated from the commits since the
 # previous tag. `workflow_dispatch` lets you run the same pipeline manually
 # (e.g. to test it) without needing a real tag.
@@ -38,15 +38,13 @@ jobs:
             $tagName = "${{ github.ref_name }}"
             $version = $tagName.TrimStart("v")
           }
-          # Inno Setup's AppVersion / .NET's AssemblyVersion both want a plain
-          # dotted-numeric string - pad a short tag like "2.6" out to 4 parts.
-          $parts = @($version -split "\." | Where-Object { $_ -match "^\d+$" })
-          while ($parts.Count -lt 4) { $parts += "0" }
-          $assemblyVersion = ($parts[0..3] -join ".")
+
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Release version must use major.minor.patch format (for example, 2.7.4)."
+          }
 
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag_name=$tagName" >> $env:GITHUB_OUTPUT
-          "assembly_version=$assemblyVersion" >> $env:GITHUB_OUTPUT
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v5
@@ -73,41 +71,9 @@ jobs:
           $proc = Start-Process msiexec.exe -ArgumentList "/i", "$($pwd)\prereqs\winfsp.msi", "/quiet", "/qn", "/norestart" -Wait -PassThru
           if ($proc.ExitCode -ne 0) { throw "WinFsp install failed with exit code $($proc.ExitCode)" }
 
-      - name: Restore
-        run: dotnet restore ZFTP.sln
-
-      - name: Publish ZFTP.App
-        run: >
-          dotnet publish src/ZFTP.App/ZFTP.App.csproj -c Release -r win-x64 --self-contained false
-          -o publish
-          -p:Version=${{ steps.version.outputs.assembly_version }}
-          -p:AssemblyVersion=${{ steps.version.outputs.assembly_version }}
-          -p:FileVersion=${{ steps.version.outputs.assembly_version }}
-
-      - name: Publish ZFTP.Updater
-        run: >
-          dotnet publish src/ZFTP.Updater/ZFTP.Updater.csproj -c Release -r win-x64 --self-contained false
-          -o publish
-          -p:Version=${{ steps.version.outputs.assembly_version }}
-          -p:AssemblyVersion=${{ steps.version.outputs.assembly_version }}
-          -p:FileVersion=${{ steps.version.outputs.assembly_version }}
-
-      - name: Download .NET 8 Desktop Runtime installer
+      - name: Build custom installer
         shell: pwsh
-        run: |
-          Invoke-WebRequest -Uri "https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe" -OutFile "prereqs\windowsdesktop-runtime.exe"
-
-      - name: Compile installer
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
-        with:
-          path: installer/ZFTP.iss
-          options: >-
-            /DMyAppVersion=${{ steps.version.outputs.version }}
-            /DPublishDir="${{ github.workspace }}\publish"
-            /DIconFile="${{ github.workspace }}\src\ZFTP.App\zftp.ico"
-            /DWinFspMsi="${{ github.workspace }}\prereqs\winfsp.msi"
-            /DDotNetExe="${{ github.workspace }}\prereqs\windowsdesktop-runtime.exe"
-            /DMyOutputDir="${{ github.workspace }}\dist"
+        run: ./installer/build-installer.ps1 -Version "${{ steps.version.outputs.version }}"
 
       - name: Generate changelog
         id: changelog

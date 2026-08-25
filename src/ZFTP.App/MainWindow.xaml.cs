@@ -37,6 +37,9 @@ public partial class MainWindow : FluentWindow
     private System.Windows.Forms.NotifyIcon? _tray;
     private bool _reallyExit;
     private bool _loadingSettings;
+    private IReadOnlyList<ThemeDefinition> _themes = Array.Empty<ThemeDefinition>();
+    private FileSystemWatcher? _themeWatcher;
+    private readonly DispatcherTimer _themeReloadTimer = new() { Interval = TimeSpan.FromMilliseconds(400) };
 
     private readonly AppSettings _settings = AppSettings.Load();
 
@@ -53,10 +56,15 @@ public partial class MainWindow : FluentWindow
         VersionText.Text = $"ZFTP version {CurrentVersion}";
         FooterVersionText.Text = $"ZFTP v{CurrentVersion}";
 
-        foreach (var t in ThemeDefs) ThemeCombo.Items.Add(t.Name);
-        ApplyTheme(_settings.Theme);
+        _themeReloadTimer.Tick += (_, _) =>
+        {
+            _themeReloadTimer.Stop();
+            ReloadThemes((ThemeCombo.SelectedItem as ThemeDefinition)?.Id ?? _settings.Theme);
+        };
+        ReloadThemes(_settings.Theme);
+        SetupThemeWatcher();
         LoadProfiles();
-        CleanGhosts();   // clear any disconnected entries left over from a prior crash
+        _ = Task.Run(CleanGhosts);   // registry cleanup should never delay first paint
         SetupTray();
         LoadSettingsToggles();
 
@@ -82,6 +90,8 @@ public partial class MainWindow : FluentWindow
 
     private void LoadProfiles()
     {
+        foreach (var existing in _servers)
+            existing.Dispose();
         _servers.Clear();
         foreach (var p in ProfileStore.Load())
             _servers.Add(new ServerItem(p));
@@ -142,7 +152,6 @@ public partial class MainWindow : FluentWindow
             if (wasMounted) item.Session.Unmount();   // settings changed — remount fresh
             item.Profile.CopyFrom(dlg.Result);
             item.RefreshAll();
-            DrivesList.Items.Refresh();
             SaveProfiles();
         }
     }
@@ -169,6 +178,7 @@ public partial class MainWindow : FluentWindow
                 MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         if (item.IsMounted) item.Session.Unmount();
         _servers.Remove(item);
+        item.Dispose();
         SaveProfiles();
         RefreshGlobalStatus();
         MaybeStopAdb();
@@ -185,7 +195,6 @@ public partial class MainWindow : FluentWindow
     private void Disconnect_Click(object sender, RoutedEventArgs e)
     {
         Selected?.Session.Unmount();
-        DrivesList.Items.Refresh();
         RefreshGlobalStatus();
         MaybeStopAdb();
     }
@@ -212,15 +221,13 @@ public partial class MainWindow : FluentWindow
 
     private async void MountAll_Click(object sender, RoutedEventArgs e)
     {
-        foreach (var item in _servers.Where(s => s.Enabled && !s.IsMounted).ToList())
-            await MountItemAsync(item);
+        await MountManyAsync(_servers.Where(s => s.Enabled && !s.IsMounted).ToList(), interactive: true);
     }
 
     private void UnmountAll_Click(object sender, RoutedEventArgs e)
     {
         foreach (var item in _servers.Where(s => s.IsMounted).ToList())
             item.Session.Unmount();
-        DrivesList.Items.Refresh();
         RefreshGlobalStatus();
         MaybeStopAdb();
     }
@@ -228,14 +235,28 @@ public partial class MainWindow : FluentWindow
     private async Task AutoMountAsync()
     {
         if (!_settings.AutoMountOnStart) return;   // master switch in Settings
-        foreach (var item in _servers.Where(s => s.Enabled && s.Profile.AutoMount && !s.IsMounted).ToList())
-            await MountItemAsync(item, interactive: false);
+        await MountManyAsync(_servers.Where(s => s.Enabled && s.Profile.AutoMount && !s.IsMounted).ToList(), interactive: false);
+    }
+
+    private async Task MountManyAsync(IReadOnlyCollection<ServerItem> items, bool interactive)
+    {
+        if (items.Count == 0) return;
+
+        // A small amount of parallelism makes startup/mount-all much faster while
+        // avoiding a burst of dozens of SSH/rclone processes at once.
+        using var gate = new SemaphoreSlim(3);
+        var tasks = items.Select(async item =>
+        {
+            await gate.WaitAsync();
+            try { await MountItemAsync(item, interactive); }
+            finally { gate.Release(); }
+        });
+        await Task.WhenAll(tasks);
     }
 
     private async Task MountItemAsync(ServerItem item, bool interactive = true)
     {
         bool ok = await item.Session.MountAsync();
-        DrivesList.Items.Refresh();
         RefreshGlobalStatus();
         if (ok)
         {
@@ -264,6 +285,8 @@ public partial class MainWindow : FluentWindow
 
     private void SpeedTimer_Tick(object? sender, EventArgs e)
     {
+        if (!IsVisible) return;
+
         long totalRead = _servers.Sum(s => s.Session.BytesRead);
         long totalWritten = _servers.Sum(s => s.Session.BytesWritten);
 
@@ -303,7 +326,6 @@ public partial class MainWindow : FluentWindow
         }
         UpdateTrayText();
         SyncDriveIcons();
-        CleanGhosts();
     }
 
     /// <summary>Purge leftover Network-location ghosts from older network-mode builds.</summary>
@@ -331,7 +353,7 @@ public partial class MainWindow : FluentWindow
         StartMinimizedToggle.IsChecked = _settings.StartMinimized;
         TrayOnCloseToggle.IsChecked = _settings.MinimizeToTrayOnClose;
         AutoMountToggle.IsChecked = _settings.AutoMountOnStart;
-        ThemeCombo.SelectedItem = ThemeDefs.Any(t => t.Name == _settings.Theme) ? _settings.Theme : ThemeDefs[0].Name;
+        ThemeCombo.SelectedItem = FindTheme(_settings.Theme) ?? _themes.FirstOrDefault();
         _loadingSettings = false;
     }
 
@@ -369,35 +391,86 @@ public partial class MainWindow : FluentWindow
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_loadingSettings) return;
-        var theme = ThemeCombo.SelectedItem as string ?? "Dark";
-        ApplyTheme(theme);
-        _settings.Theme = theme;
+        if (ThemeCombo.SelectedItem is not ThemeDefinition theme) return;
+        ZftpThemeManager.Apply(theme, this);
+        UpdateThemeDetails(theme, Array.Empty<string>());
+        _settings.Theme = theme.Id;
         _settings.Save();
     }
 
-    // Each theme = a base (Dark/Light) plus an accent colour (R,G,B).
-    private static readonly (string Name, Wpf.Ui.Appearance.ApplicationTheme Base, byte R, byte G, byte B)[] ThemeDefs =
+    private void ReloadThemes(string? preferredId)
     {
-        ("Dark Blue",        Wpf.Ui.Appearance.ApplicationTheme.Dark,  0x2D, 0x7D, 0xD2),
-        ("Midnight Purple",  Wpf.Ui.Appearance.ApplicationTheme.Dark,  0x8B, 0x5C, 0xF6),
-        ("Forest Green",     Wpf.Ui.Appearance.ApplicationTheme.Dark,  0x22, 0xC5, 0x5E),
-        ("Sunset Orange",    Wpf.Ui.Appearance.ApplicationTheme.Dark,  0xF9, 0x73, 0x16),
-        ("Crimson Red",      Wpf.Ui.Appearance.ApplicationTheme.Dark,  0xEF, 0x44, 0x44),
-        ("Ocean Cyan",       Wpf.Ui.Appearance.ApplicationTheme.Dark,  0x06, 0xB6, 0xD4),
-        ("Rose Pink",        Wpf.Ui.Appearance.ApplicationTheme.Dark,  0xEC, 0x48, 0x99),
-        ("Amber Gold",       Wpf.Ui.Appearance.ApplicationTheme.Dark,  0xF5, 0xB3, 0x00),
-        ("Light Blue",       Wpf.Ui.Appearance.ApplicationTheme.Light, 0x25, 0x63, 0xEB),
-        ("Light Green",      Wpf.Ui.Appearance.ApplicationTheme.Light, 0x16, 0xA3, 0x4A),
-    };
+        var result = ThemeCatalog.LoadAll();
+        _themes = result.Themes;
+        var selected = FindTheme(preferredId) ?? FindTheme(_settings.Theme) ?? _themes.FirstOrDefault();
 
-    private static void ApplyTheme(string name)
+        bool previousLoading = _loadingSettings;
+        _loadingSettings = true;
+        ThemeCombo.ItemsSource = _themes;
+        ThemeCombo.SelectedItem = selected;
+        _loadingSettings = previousLoading;
+
+        if (selected != null)
+        {
+            ZftpThemeManager.Apply(selected, this);
+            UpdateThemeDetails(selected, result.Errors);
+        }
+    }
+
+    private ThemeDefinition? FindTheme(string? idOrName)
     {
-        var def = ThemeDefs.FirstOrDefault(t => t.Name == name);
-        if (def.Name == null) def = ThemeDefs[0];
-        var accent = System.Windows.Media.Color.FromRgb(def.R, def.G, def.B);
-        // Apply the base theme WITHOUT resetting the accent, then set our accent.
-        Wpf.Ui.Appearance.ApplicationThemeManager.Apply(def.Base, Wpf.Ui.Controls.WindowBackdropType.Mica, updateAccent: false);
-        Wpf.Ui.Appearance.ApplicationAccentColorManager.Apply(accent, def.Base);
+        if (string.IsNullOrWhiteSpace(idOrName)) return null;
+        return _themes.FirstOrDefault(t =>
+            t.Id.Equals(idOrName, StringComparison.OrdinalIgnoreCase) ||
+            t.Name.Equals(idOrName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void UpdateThemeDetails(ThemeDefinition theme, IReadOnlyList<string> errors)
+    {
+        ThemeDescriptionText.Text = $"{theme.Description}  —  by {theme.Author}";
+        ThemeSourceText.Text = errors.Count == 0
+            ? $"{(theme.IsBuiltIn ? "Built-in theme" : "Local theme")}. Drop .json themes into {ThemeCatalog.ThemeFolderPath}. ZFTP watches the folder automatically."
+            : $"Loaded with {errors.Count} invalid local theme file{(errors.Count == 1 ? "" : "s")} skipped. Open the theme folder to fix them.";
+    }
+
+    private void SetupThemeWatcher()
+    {
+        try
+        {
+            ThemeCatalog.EnsureThemeFolder();
+            _themeWatcher = new FileSystemWatcher(ThemeCatalog.ThemeFolderPath, "*.json")
+            {
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
+                IncludeSubdirectories = false,
+                EnableRaisingEvents = true,
+            };
+            _themeWatcher.Changed += ThemeFilesChanged;
+            _themeWatcher.Created += ThemeFilesChanged;
+            _themeWatcher.Deleted += ThemeFilesChanged;
+            _themeWatcher.Renamed += ThemeFilesChanged;
+        }
+        catch
+        {
+            // The Reload button remains available if the OS refuses a watcher.
+        }
+    }
+
+    private void ThemeFilesChanged(object sender, FileSystemEventArgs e)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            _themeReloadTimer.Stop();
+            _themeReloadTimer.Start();
+        });
+    }
+
+    private void ReloadThemes_Click(object sender, RoutedEventArgs e) =>
+        ReloadThemes((ThemeCombo.SelectedItem as ThemeDefinition)?.Id ?? _settings.Theme);
+
+    private void OpenThemesFolder_Click(object sender, RoutedEventArgs e)
+    {
+        ThemeCatalog.EnsureThemeFolder();
+        Process.Start(new ProcessStartInfo(ThemeCatalog.ThemeFolderPath) { UseShellExecute = true });
     }
 
     // ---- system tray -------------------------------------------------------
@@ -480,8 +553,7 @@ public partial class MainWindow : FluentWindow
 
     private async Task AutoMountAllEnabled()
     {
-        foreach (var item in _servers.Where(s => s.Enabled && !s.IsMounted).ToList())
-            await MountItemAsync(item, interactive: false);
+        await MountManyAsync(_servers.Where(s => s.Enabled && !s.IsMounted).ToList(), interactive: false);
     }
 
     private void UpdateTrayText()
@@ -495,6 +567,10 @@ public partial class MainWindow : FluentWindow
     {
         Show();
         WindowState = WindowState.Normal;
+        Array.Clear(_readWindow);
+        Array.Clear(_writeWindow);
+        _lastBytesRead = _servers.Sum(s => s.Session.BytesRead);
+        _lastBytesWritten = _servers.Sum(s => s.Session.BytesWritten);
         Activate();
     }
 
@@ -532,6 +608,10 @@ public partial class MainWindow : FluentWindow
         DriveIconManager.Refresh();
         CleanGhosts();
         if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
+        _speedTimer.Stop();
+        _themeReloadTimer.Stop();
+        _themeWatcher?.Dispose();
+        foreach (var item in _servers) item.Dispose();
         Application.Current.Shutdown();
     }
 

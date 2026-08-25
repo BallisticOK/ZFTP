@@ -12,26 +12,27 @@
 ; the maintainer's own local absolute paths stay the default otherwise.
 #define MyAppName "ZFTP"
 #ifndef MyAppVersion
-  #define MyAppVersion "2.6.1"
+  #define MyAppVersion "2.7.4"
 #endif
 #define MyAppPublisher "ZFTP"
 #define MyAppExeName "ZFTP.exe"
 #define MyUpdaterExe "ZFTP.Updater.exe"
 
+#define ProjectDir SourcePath + ".."
 #ifndef PublishDir
-  #define PublishDir "E:\SFTP Net Drive\ZFTP\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish"
+  #define PublishDir ProjectDir + "\src\ZFTP.App\bin\Release\net8.0-windows\win-x64\fd-publish"
 #endif
 #ifndef IconFile
-  #define IconFile "E:\SFTP Net Drive\ZFTP\src\ZFTP.App\zftp.ico"
+  #define IconFile ProjectDir + "\src\ZFTP.App\zftp.ico"
 #endif
 #ifndef WinFspMsi
-  #define WinFspMsi "E:\SFTP Net Drive\_setup\winfsp-2.1.25156.msi"
+  #define WinFspMsi SourcePath + "prereqs\winfsp-x64.msi"
 #endif
 #ifndef DotNetExe
-  #define DotNetExe "E:\SFTP Net Drive\_setup\windowsdesktop-runtime-8-x64.exe"
+  #define DotNetExe SourcePath + "prereqs\windowsdesktop-runtime-8-x64.exe"
 #endif
 #ifndef MyOutputDir
-  #define MyOutputDir "E:\SFTP Net Drive\ZFTP\dist"
+  #define MyOutputDir ProjectDir + "\dist"
 #endif
 
 [Setup]
