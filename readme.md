@@ -12,7 +12,7 @@
 
 <br/>
 
-[![version](https://img.shields.io/badge/version-2.7.4-2D7DD2?style=for-the-badge)](https://github.com/BallisticOK/ZFTP/releases)
+[![version](https://img.shields.io/badge/version-2.7.5-2D7DD2?style=for-the-badge)](https://github.com/BallisticOK/ZFTP/releases)
 [![platform](https://img.shields.io/badge/Windows%2010%20%2F%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/BallisticOK/ZFTP/releases)
 [![.NET 8](https://img.shields.io/badge/.NET%208%20%2B%20WPF-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![price](https://img.shields.io/badge/price-%240.00%20forever-22C55E?style=for-the-badge)](#-why-it-exists)
@@ -68,7 +68,7 @@ It started as an SFTP tool. It now mounts **eleven kinds of storage** through on
 - **Self-healing** — a watchdog silently remounts after sleep, Wi-Fi drops, or a phone reconnect
 - **System tray** — closing the window keeps drives mounted
 - **Built-in updater** from GitHub Releases / CDN
-- **16 built-in themes + local community themes** — palettes, fonts, density, corners and glass/no-glass backdrops ([theme guide](docs/themes.md))
+- **16 built-in themes + an advanced custom theme engine** — palettes, typography, density, spacing, sizing, corners, backdrops and typed WPF/UI resource overrides with live reload ([theme guide](docs/themes.md))
 
 </td>
 </tr>

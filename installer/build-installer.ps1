@@ -22,7 +22,7 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 }
 
 if ($Version -notmatch '^\d+\.\d+\.\d+$') {
-    throw "Version must use numeric major.minor.patch format (for example, 2.7.4). Got: $Version"
+    throw "Version must use numeric major.minor.patch format (for example, 2.7.5). Got: $Version"
 }
 
 $assemblyVersion = "$Version.0"

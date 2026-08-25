@@ -3,14 +3,15 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:local="clr-namespace:ZFTP.App"
-        Title="ZFTP" Height="700" Width="1120"
-        MinHeight="560" MinWidth="900"
+        Title="ZFTP" Height="{DynamicResource ZftpWindowHeight}" Width="{DynamicResource ZftpWindowWidth}"
+        MinHeight="{DynamicResource ZftpWindowMinHeight}" MinWidth="{DynamicResource ZftpWindowMinWidth}"
         Icon="/Assets/logo.png"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica"
         Background="{DynamicResource ZftpWindowBackgroundBrush}"
         Foreground="{DynamicResource ZftpTextBrush}"
         FontFamily="{DynamicResource ZftpThemeFontFamily}"
+        FontSize="{DynamicResource ZftpBaseFontSize}"
         WindowStartupLocation="CenterScreen">
 
     <ui:FluentWindow.Resources>
@@ -34,11 +35,11 @@
             </ui:TitleBar.Icon>
         </ui:TitleBar>
 
-        <TabControl Grid.Row="1" Margin="8,4,8,4" Background="Transparent" BorderThickness="0">
+        <TabControl Grid.Row="1" Margin="{DynamicResource ZftpTabMargin}" Background="Transparent" BorderThickness="0">
 
             <!-- ====================== DRIVES TAB ====================== -->
             <TabItem Header="Drives">
-                <Grid Margin="6,12,6,6">
+                <Grid Margin="{DynamicResource ZftpMainPageMargin}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -77,7 +78,7 @@
                                 </Grid.RowDefinitions>
 
                                 <!-- column header (kept aligned with the rows below) -->
-                                <Grid Grid.Row="0" Margin="22,12,20,8">
+                                <Grid Grid.Row="0" Margin="{DynamicResource ZftpListHeaderMargin}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="30" />
                                         <ColumnDefinition Width="1.3*" />
@@ -87,17 +88,17 @@
                                         <ColumnDefinition Width="64" />
                                         <ColumnDefinition Width="104" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="1" Text="NAME" FontSize="11" FontWeight="SemiBold" Opacity="0.55" />
-                                    <TextBlock Grid.Column="2" Text="DRIVE" FontSize="11" FontWeight="SemiBold" Opacity="0.55" />
-                                    <TextBlock Grid.Column="3" Text="REMOTE HOST" FontSize="11" FontWeight="SemiBold" Opacity="0.55" />
-                                    <TextBlock Grid.Column="4" Text="REMOTE DIRECTORY" FontSize="11" FontWeight="SemiBold" Opacity="0.55" />
-                                    <TextBlock Grid.Column="5" Text="ON" FontSize="11" FontWeight="SemiBold" Opacity="0.55" HorizontalAlignment="Center" />
-                                    <TextBlock Grid.Column="6" Text="STATUS" FontSize="11" FontWeight="SemiBold" Opacity="0.55" />
+                                    <TextBlock Grid.Column="1" Text="NAME" FontSize="{DynamicResource ZftpMicroFontSize}" FontWeight="SemiBold" Opacity="0.55" />
+                                    <TextBlock Grid.Column="2" Text="DRIVE" FontSize="{DynamicResource ZftpMicroFontSize}" FontWeight="SemiBold" Opacity="0.55" />
+                                    <TextBlock Grid.Column="3" Text="REMOTE HOST" FontSize="{DynamicResource ZftpMicroFontSize}" FontWeight="SemiBold" Opacity="0.55" />
+                                    <TextBlock Grid.Column="4" Text="REMOTE DIRECTORY" FontSize="{DynamicResource ZftpMicroFontSize}" FontWeight="SemiBold" Opacity="0.55" />
+                                    <TextBlock Grid.Column="5" Text="ON" FontSize="{DynamicResource ZftpMicroFontSize}" FontWeight="SemiBold" Opacity="0.55" HorizontalAlignment="Center" />
+                                    <TextBlock Grid.Column="6" Text="STATUS" FontSize="{DynamicResource ZftpMicroFontSize}" FontWeight="SemiBold" Opacity="0.55" />
                                 </Grid>
                                 <Border Grid.Row="1" Height="1" Background="{DynamicResource ZftpBorderBrush}" Margin="14,0" />
 
                                 <ListBox x:Name="DrivesList" Grid.Row="2"
-                                         Background="Transparent" BorderThickness="0" Padding="6,6"
+                                         Background="Transparent" BorderThickness="0" Padding="{DynamicResource ZftpListPadding}"
                                          HorizontalContentAlignment="Stretch"
                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                          MouseDoubleClick="DrivesGrid_MouseDoubleClick">
@@ -143,20 +144,20 @@
                                                     <ColumnDefinition Width="104" />
                                                 </Grid.ColumnDefinitions>
 
-                                                <ui:SymbolIcon Grid.Column="0" Symbol="CloudLink24" FontSize="18"
+                                                <ui:SymbolIcon Grid.Column="0" Symbol="CloudLink24" FontSize="{DynamicResource ZftpIconFontSize}"
                                                                VerticalAlignment="Center"
                                                                Foreground="{Binding TagBrush}" />
 
                                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
                                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
-                                                               FontSize="14" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="{Binding ProviderLabel}" FontSize="11"
+                                                               FontSize="{DynamicResource ZftpItemTitleFontSize}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding ProviderLabel}" FontSize="{DynamicResource ZftpMicroFontSize}"
                                                                Opacity="0.6" />
                                                 </StackPanel>
 
                                                 <Border Grid.Column="2" Background="{DynamicResource ZftpBadgeBrush}" CornerRadius="{DynamicResource ZftpSmallCornerRadius}"
                                                         Padding="8,3" HorizontalAlignment="Left" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding DriveLabel}" FontWeight="SemiBold" FontSize="12" />
+                                                    <TextBlock Text="{Binding DriveLabel}" FontWeight="SemiBold" FontSize="{DynamicResource ZftpCaptionFontSize}" />
                                                 </Border>
 
                                                 <TextBlock Grid.Column="3" Text="{Binding Host}" VerticalAlignment="Center"
@@ -179,7 +180,7 @@
                             </Grid>
                         </Border>
 
-                        <StackPanel Grid.Column="1" Margin="12,0,0,0" MinWidth="120">
+                        <StackPanel Grid.Column="1" Margin="{DynamicResource ZftpActionPanelMargin}" MinWidth="{DynamicResource ZftpActionPanelMinWidth}">
                             <ui:Button Content="New" HorizontalAlignment="Stretch" Margin="0,0,0,6"
                                        Icon="{ui:SymbolIcon Add24}" Click="New_Click" />
                             <ui:Button Content="Edit" HorizontalAlignment="Stretch" Margin="0,0,0,6"
@@ -202,11 +203,11 @@
             <!-- ====================== SETTINGS TAB ====================== -->
             <TabItem Header="Settings">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="20,20,20,16" MaxWidth="680" HorizontalAlignment="Left">
+                    <StackPanel Margin="{DynamicResource ZftpPageMargin}" MaxWidth="{DynamicResource ZftpSettingsMaxWidth}" HorizontalAlignment="Left">
 
-                        <TextBlock Text="Startup &amp; tray" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+                        <TextBlock Text="Startup &amp; tray" FontSize="{DynamicResource ZftpSectionFontSize}" FontWeight="SemiBold" Margin="0,0,0,12" />
 
-                        <ui:Card Margin="0,0,0,10" Padding="16,14">
+                        <ui:Card Margin="{DynamicResource ZftpCardMargin}" Padding="{DynamicResource ZftpCardPadding}">
                             <Grid VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -215,14 +216,14 @@
                                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Start ZFTP with Windows" FontWeight="SemiBold" />
                                     <TextBlock Text="Launch automatically when you log into Windows."
-                                               Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                               Opacity="0.7" FontSize="{DynamicResource ZftpCaptionFontSize}" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <ui:ToggleSwitch Grid.Column="1" x:Name="StartWithWindowsToggle" HorizontalAlignment="Right"
                                                  VerticalAlignment="Center" Click="StartWithWindows_Toggled" />
                             </Grid>
                         </ui:Card>
 
-                        <ui:Card Margin="0,0,0,10" Padding="16,14">
+                        <ui:Card Margin="{DynamicResource ZftpCardMargin}" Padding="{DynamicResource ZftpCardPadding}">
                             <Grid VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -231,14 +232,14 @@
                                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Start in the system tray" FontWeight="SemiBold" />
                                     <TextBlock Text="Open hidden in the tray instead of showing the window."
-                                               Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                               Opacity="0.7" FontSize="{DynamicResource ZftpCaptionFontSize}" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <ui:ToggleSwitch Grid.Column="1" x:Name="StartMinimizedToggle" HorizontalAlignment="Right"
                                                  VerticalAlignment="Center" Click="StartMinimized_Toggled" />
                             </Grid>
                         </ui:Card>
 
-                        <ui:Card Margin="0,0,0,10" Padding="16,14">
+                        <ui:Card Margin="{DynamicResource ZftpCardMargin}" Padding="{DynamicResource ZftpCardPadding}">
                             <Grid VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -247,16 +248,16 @@
                                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Keep running in tray when window is closed" FontWeight="SemiBold" />
                                     <TextBlock Text="Closing the window hides it to the tray (drives stay mounted). Turn off to fully quit on close."
-                                               Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                               Opacity="0.7" FontSize="{DynamicResource ZftpCaptionFontSize}" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <ui:ToggleSwitch Grid.Column="1" x:Name="TrayOnCloseToggle" HorizontalAlignment="Right"
                                                  VerticalAlignment="Center" Click="TrayOnClose_Toggled" />
                             </Grid>
                         </ui:Card>
 
-                        <TextBlock Text="Mounting" FontSize="18" FontWeight="SemiBold" Margin="0,12,0,12" />
+                        <TextBlock Text="Mounting" FontSize="{DynamicResource ZftpSectionFontSize}" FontWeight="SemiBold" Margin="{DynamicResource ZftpSectionMargin}" />
 
-                        <ui:Card Margin="0,0,0,10" Padding="16,14">
+                        <ui:Card Margin="{DynamicResource ZftpCardMargin}" Padding="{DynamicResource ZftpCardPadding}">
                             <Grid VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -265,16 +266,16 @@
                                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Auto-mount drives on startup" FontWeight="SemiBold" />
                                     <TextBlock Text="When ZFTP starts, mount every enabled drive that has Auto-mount turned on (set per drive in its Edit dialog)."
-                                               Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                               Opacity="0.7" FontSize="{DynamicResource ZftpCaptionFontSize}" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <ui:ToggleSwitch Grid.Column="1" x:Name="AutoMountToggle" HorizontalAlignment="Right"
                                                  VerticalAlignment="Center" Click="AutoMountOnStart_Toggled" />
                             </Grid>
                         </ui:Card>
 
-                        <TextBlock Text="Appearance" FontSize="18" FontWeight="SemiBold" Margin="0,12,0,12" />
+                        <TextBlock Text="Appearance" FontSize="{DynamicResource ZftpSectionFontSize}" FontWeight="SemiBold" Margin="{DynamicResource ZftpSectionMargin}" />
 
-                        <ui:Card Margin="0,0,0,10" Padding="16,14">
+                        <ui:Card Margin="{DynamicResource ZftpCardMargin}" Padding="{DynamicResource ZftpCardPadding}">
                             <Grid VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -282,15 +283,15 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock Text="Theme" FontWeight="SemiBold" />
-                                    <TextBlock x:Name="ThemeDescriptionText" Text="Built-in and local community themes." Opacity="0.7" FontSize="12" TextWrapping="Wrap" MaxWidth="390" />
+                                    <TextBlock x:Name="ThemeDescriptionText" Text="Built-in and local community themes." Opacity="0.7" FontSize="{DynamicResource ZftpCaptionFontSize}" TextWrapping="Wrap" MaxWidth="390" />
                                 </StackPanel>
                                 <ComboBox Grid.Column="1" x:Name="ThemeCombo" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                          MinWidth="220" DisplayMemberPath="Name" SelectionChanged="Theme_Changed" />
+                                          MinWidth="{DynamicResource ZftpThemeSelectorMinWidth}" DisplayMemberPath="Name" SelectionChanged="Theme_Changed" />
                                 <!-- Items are populated in code from the theme list. -->
                             </Grid>
                         </ui:Card>
 
-                        <ui:Card Margin="0,0,0,10" Padding="16,14">
+                        <ui:Card Margin="{DynamicResource ZftpCardMargin}" Padding="{DynamicResource ZftpCardPadding}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -300,18 +301,19 @@
                                     <TextBlock Text="Community themes" FontWeight="SemiBold" />
                                     <TextBlock x:Name="ThemeSourceText"
                                                Text="Drop .json themes into your local Themes folder. ZFTP watches it automatically."
-                                               Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                               Opacity="0.7" FontSize="{DynamicResource ZftpCaptionFontSize}" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <ui:Button Content="Create from selected" Margin="0,0,8,0" Click="CreateTheme_Click" />
                                     <ui:Button Content="Open folder" Margin="0,0,8,0" Click="OpenThemesFolder_Click" />
                                     <ui:Button Content="Reload themes" Click="ReloadThemes_Click" />
                                 </StackPanel>
                             </Grid>
                         </ui:Card>
 
-                        <TextBlock Text="Updates" FontSize="18" FontWeight="SemiBold" Margin="0,12,0,12" />
+                        <TextBlock Text="Updates" FontSize="{DynamicResource ZftpSectionFontSize}" FontWeight="SemiBold" Margin="{DynamicResource ZftpSectionMargin}" />
 
-                        <ui:Card Margin="0,0,0,10" Padding="16,14">
+                        <ui:Card Margin="{DynamicResource ZftpCardMargin}" Padding="{DynamicResource ZftpCardPadding}">
                             <Grid VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -320,7 +322,7 @@
                                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
                                     <TextBlock x:Name="VersionText" Text="ZFTP version 0.1.0" FontWeight="SemiBold" />
                                     <TextBlock x:Name="UpdateStatusText" Text="Check for a newer version of ZFTP."
-                                               Opacity="0.7" FontSize="12" TextWrapping="Wrap" />
+                                               Opacity="0.7" FontSize="{DynamicResource ZftpCaptionFontSize}" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <ui:Button Grid.Column="1" x:Name="CheckUpdateButton" Content="Check for updates"
                                            HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -328,10 +330,10 @@
                             </Grid>
                         </ui:Card>
 
-                        <ui:Card Margin="0,8,0,0" Padding="16,12">
+                        <ui:Card Margin="{DynamicResource ZftpFooterCardMargin}" Padding="{DynamicResource ZftpFooterCardPadding}">
                             <StackPanel>
                                 <TextBlock Text="Config location" FontWeight="SemiBold" Margin="0,0,0,2" />
-                                <TextBlock x:Name="ConfigPathText" Opacity="0.6" FontSize="11" TextWrapping="Wrap" />
+                                <TextBlock x:Name="ConfigPathText" Opacity="0.6" FontSize="{DynamicResource ZftpMicroFontSize}" TextWrapping="Wrap" />
                             </StackPanel>
                         </ui:Card>
                     </StackPanel>
@@ -340,7 +342,7 @@
         </TabControl>
 
         <!-- ====================== STATUS BAR ====================== -->
-        <Border Grid.Row="2" Background="{DynamicResource ZftpStatusBarBrush}" Padding="12,6">
+        <Border Grid.Row="2" Background="{DynamicResource ZftpStatusBarBrush}" Padding="{DynamicResource ZftpStatusBarPadding}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -357,15 +359,15 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
-                    <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="14" Foreground="#4FC3F7"
+                    <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="{DynamicResource ZftpItemTitleFontSize}" Foreground="{DynamicResource ZftpDownloadBrush}"
                                    VerticalAlignment="Center" Margin="0,0,4,0" />
                     <TextBlock x:Name="DownSpeedText" Text="0 B/s" VerticalAlignment="Center" MinWidth="62" />
-                    <TextBlock x:Name="DownTotalText" Text="(0 B)" Opacity="0.55" FontSize="11"
+                    <TextBlock x:Name="DownTotalText" Text="(0 B)" Opacity="0.55" FontSize="{DynamicResource ZftpMicroFontSize}"
                                VerticalAlignment="Center" Margin="0,0,12,0" />
-                    <ui:SymbolIcon Symbol="ArrowUpload24" FontSize="14" Foreground="#81C784"
+                    <ui:SymbolIcon Symbol="ArrowUpload24" FontSize="{DynamicResource ZftpItemTitleFontSize}" Foreground="{DynamicResource ZftpUploadBrush}"
                                    VerticalAlignment="Center" Margin="0,0,4,0" />
                     <TextBlock x:Name="UpSpeedText" Text="0 B/s" VerticalAlignment="Center" MinWidth="62" />
-                    <TextBlock x:Name="UpTotalText" Text="(0 B)" Opacity="0.55" FontSize="11"
+                    <TextBlock x:Name="UpTotalText" Text="(0 B)" Opacity="0.55" FontSize="{DynamicResource ZftpMicroFontSize}"
                                VerticalAlignment="Center" Margin="0,0,0,0" />
                 </StackPanel>
 

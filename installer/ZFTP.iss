@@ -12,7 +12,7 @@
 ; the maintainer's own local absolute paths stay the default otherwise.
 #define MyAppName "ZFTP"
 #ifndef MyAppVersion
-  #define MyAppVersion "2.7.4"
+  #define MyAppVersion "2.7.5"
 #endif
 #define MyAppPublisher "ZFTP"
 #define MyAppExeName "ZFTP.exe"

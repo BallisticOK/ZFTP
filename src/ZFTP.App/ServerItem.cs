@@ -90,12 +90,15 @@ public sealed class ServerItem : INotifyPropertyChanged, IDisposable
 
     public Brush StatusColor => Session.State switch
     {
-        MountState.Mounted => Brushes.LimeGreen,
-        MountState.Connecting => Brushes.Goldenrod,
-        MountState.Reconnecting => Brushes.Goldenrod,
-        MountState.Error => Brushes.OrangeRed,
-        _ => Brushes.Gray,
+        MountState.Mounted => ThemeBrush("ZftpSuccessBrush", Brushes.LimeGreen),
+        MountState.Connecting => ThemeBrush("ZftpWarningBrush", Brushes.Goldenrod),
+        MountState.Reconnecting => ThemeBrush("ZftpWarningBrush", Brushes.Goldenrod),
+        MountState.Error => ThemeBrush("ZftpErrorBrush", Brushes.OrangeRed),
+        _ => ThemeBrush("ZftpStoppedBrush", Brushes.Gray),
     };
+
+    private static Brush ThemeBrush(string key, Brush fallback) =>
+        System.Windows.Application.Current?.TryFindResource(key) as Brush ?? fallback;
 
     private void RaiseStatusChanged()
     {

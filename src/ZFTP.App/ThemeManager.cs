@@ -1,4 +1,5 @@
 using System.IO;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows;
@@ -17,7 +18,7 @@ namespace ZFTP.App;
 
 public sealed class ThemeDefinition
 {
-    public int SchemaVersion { get; set; } = 1;
+    public int SchemaVersion { get; set; } = 2;
     public string Id { get; set; } = "custom-theme";
     public string Name { get; set; } = "Custom Theme";
     public string Author { get; set; } = "Community";
@@ -41,6 +42,7 @@ public sealed class ThemeDefinition
     public string FontFamily { get; set; } = "Segoe UI";
     public double CornerRadius { get; set; } = 10;
     public double RowHeight { get; set; } = 48;
+    public Dictionary<string, JsonElement> Resources { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     [JsonIgnore] public bool IsBuiltIn { get; init; }
     [JsonIgnore] public string? SourcePath { get; init; }
@@ -93,7 +95,7 @@ public static class ThemeCatalog
     {
         Directory.CreateDirectory(ThemeFolderPath);
 
-        var examplePath = Path.Combine(ThemeFolderPath, "theme-template.json.example");
+        var examplePath = Path.Combine(ThemeFolderPath, "theme-template-v2.json.example");
         if (!File.Exists(examplePath))
         {
             var template = new ThemeDefinition
@@ -121,28 +123,83 @@ public static class ThemeCatalog
                 FontFamily = "Consolas",
                 CornerRadius = 4,
                 RowHeight = 46,
+                Resources = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["ZftpBaseFontSize"] = JsonSerializer.SerializeToElement(13.0),
+                    ["ZftpSectionFontSize"] = JsonSerializer.SerializeToElement(18.0),
+                    ["ZftpPageMargin"] = JsonSerializer.SerializeToElement(new { Type = "Thickness", Value = "20,20,20,16" }),
+                    ["ZftpCardPadding"] = JsonSerializer.SerializeToElement(new { Type = "Thickness", Value = "16,14" }),
+                },
             };
             File.WriteAllText(examplePath, JsonSerializer.Serialize(template, JsonOptions));
         }
 
-        var readmePath = Path.Combine(ThemeFolderPath, "README.txt");
+        var readmePath = Path.Combine(ThemeFolderPath, "README-v2.txt");
         if (!File.Exists(readmePath))
         {
             File.WriteAllText(readmePath,
                 "ZFTP LOCAL THEMES\r\n\r\n" +
-                "1. Copy theme-template.json.example to a new file ending in .json.\r\n" +
+                "1. Copy theme-template-v2.json.example to a new file ending in .json, or use Create from selected in Settings.\r\n" +
                 "2. Give it a unique Id and Name.\r\n" +
-                "3. Edit the colors, font, corner radius, row height, Base (Dark/Light), and Backdrop.\r\n" +
-                "4. ZFTP watches this folder and reloads themes automatically. You can also press Reload themes.\r\n\r\n" +
+                "3. Edit the core colors, font, corner radius, row height, Base (Dark/Light), and Backdrop.\r\n" +
+                "4. Use the Resources object to override any ZFTP/WPF resource token for advanced styling.\r\n" +
+                "5. ZFTP watches this folder and reloads themes automatically. You can also press Reload themes.\r\n\r\n" +
                 "Colors accept #RRGGBB or #AARRGGBB. Backdrop can be None, Mica, or any backdrop supported by your installed WPF-UI version.\r\n" +
-                "Keep SchemaVersion at 1 for this version of ZFTP. Invalid themes are skipped instead of crashing the app.\r\n");
+                "SchemaVersion 2 adds typed resource overrides. SchemaVersion 1 themes are still supported. Invalid values are skipped instead of crashing the app.\r\n");
         }
+    }
+
+    public static string CreateCustomCopy(ThemeDefinition source)
+    {
+        EnsureThemeFolder();
+
+        var baseId = Slug(source.Id) + "-custom";
+        var id = baseId;
+        var suffix = 2;
+        var existingIds = LoadAll().Themes.Select(t => t.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        while (existingIds.Contains(id) || File.Exists(Path.Combine(ThemeFolderPath, id + ".json")))
+        {
+            id = $"{baseId}-{suffix++}";
+        }
+
+        var copy = new ThemeDefinition
+        {
+            SchemaVersion = 2,
+            Id = id,
+            Name = source.Name + " Custom",
+            Author = "You",
+            Description = $"A fully customizable theme based on {source.Name}.",
+            Base = source.Base,
+            Backdrop = source.Backdrop,
+            Accent = source.Accent,
+            WindowBackground = source.WindowBackground,
+            Surface = source.Surface,
+            SurfaceAlt = source.SurfaceAlt,
+            Border = source.Border,
+            Text = source.Text,
+            TextMuted = source.TextMuted,
+            Selection = source.Selection,
+            Hover = source.Hover,
+            Badge = source.Badge,
+            StatusBar = source.StatusBar,
+            Success = source.Success,
+            Warning = source.Warning,
+            Error = source.Error,
+            FontFamily = source.FontFamily,
+            CornerRadius = source.CornerRadius,
+            RowHeight = source.RowHeight,
+            Resources = source.Resources.ToDictionary(p => p.Key, p => p.Value.Clone(), StringComparer.OrdinalIgnoreCase),
+        };
+
+        var path = Path.Combine(ThemeFolderPath, id + ".json");
+        File.WriteAllText(path, JsonSerializer.Serialize(copy, JsonOptions));
+        return path;
     }
 
     private static ThemeDefinition Normalize(ThemeDefinition t, string path)
     {
-        if (t.SchemaVersion != 1)
-            throw new InvalidDataException($"Unsupported SchemaVersion {t.SchemaVersion}; expected 1.");
+        if (t.SchemaVersion is not (1 or 2))
+            throw new InvalidDataException($"Unsupported SchemaVersion {t.SchemaVersion}; expected 1 or 2.");
         if (string.IsNullOrWhiteSpace(t.Id)) throw new InvalidDataException("Id is required.");
         if (string.IsNullOrWhiteSpace(t.Name)) throw new InvalidDataException("Name is required.");
 
@@ -163,6 +220,17 @@ public static class ThemeCatalog
         t.FontFamily = string.IsNullOrWhiteSpace(t.FontFamily) ? "Segoe UI" : t.FontFamily.Trim();
         t.CornerRadius = Math.Clamp(t.CornerRadius, 0, 32);
         t.RowHeight = Math.Clamp(t.RowHeight, 36, 80);
+
+        var resources = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+        if (t.Resources is not null)
+        {
+            foreach (var pair in t.Resources)
+            {
+                if (string.IsNullOrWhiteSpace(pair.Key))
+                    throw new InvalidDataException("Resource override names cannot be empty.");
+                resources[pair.Key.Trim()] = pair.Value.Clone();
+            }
+        }
 
         return new ThemeDefinition
         {
@@ -190,6 +258,7 @@ public static class ThemeCatalog
             FontFamily = t.FontFamily,
             CornerRadius = t.CornerRadius,
             RowHeight = t.RowHeight,
+            Resources = resources,
             SourcePath = path,
         };
     }
@@ -297,8 +366,21 @@ public static class ThemeCatalog
         Surface = t.Surface, SurfaceAlt = t.SurfaceAlt, Border = t.Border, Text = t.Text, TextMuted = t.TextMuted,
         Selection = t.Selection, Hover = t.Hover, Badge = t.Badge, StatusBar = t.StatusBar, Success = t.Success,
         Warning = t.Warning, Error = t.Error, FontFamily = t.FontFamily, CornerRadius = t.CornerRadius,
-        RowHeight = t.RowHeight, IsBuiltIn = true,
+        RowHeight = t.RowHeight,
+        Resources = t.Resources.ToDictionary(p => p.Key, p => p.Value.Clone(), StringComparer.OrdinalIgnoreCase),
+        IsBuiltIn = true,
     };
+
+    private static string Slug(string value)
+    {
+        var chars = value.Trim().ToLowerInvariant()
+            .Select(c => char.IsLetterOrDigit(c) ? c : '-')
+            .ToArray();
+        var slug = new string(chars);
+        while (slug.Contains("--", StringComparison.Ordinal)) slug = slug.Replace("--", "-", StringComparison.Ordinal);
+        var clean = slug.Trim('-');
+        return clean.Length > 0 ? clean : "custom-theme";
+    }
 
     internal static bool TryColor(string value, out Color color)
     {
@@ -315,8 +397,17 @@ public static class ThemeCatalog
 
 public static class ZftpThemeManager
 {
-    public static void Apply(ThemeDefinition theme, FluentWindow window)
+    private sealed record ResourceBaseline(bool HadLocalValue, object? Value);
+
+    private static readonly Dictionary<string, ResourceBaseline> ResourceBaselines = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> ActiveResourceOverrides = new(StringComparer.OrdinalIgnoreCase);
+
+    public static IReadOnlyList<string> Apply(ThemeDefinition theme, FluentWindow window)
     {
+        var warnings = new List<string>();
+        var resources = Application.Current.Resources;
+        RestoreResourceOverrides(resources);
+
         var baseTheme = theme.Base.Equals("Light", StringComparison.OrdinalIgnoreCase)
             ? ApplicationTheme.Light
             : ApplicationTheme.Dark;
@@ -328,7 +419,6 @@ public static class ZftpThemeManager
         var accent = ParseColor(theme.Accent, Colors.DodgerBlue);
         ApplicationAccentColorManager.Apply(accent, baseTheme);
 
-        var resources = Application.Current.Resources;
         resources["ZftpAccentBrush"] = Brush(theme.Accent, "#FF2D7DD2");
         resources["ZftpWindowBackgroundBrush"] = Brush(theme.WindowBackground, "#FF0E1117");
         resources["ZftpSurfaceBrush"] = Brush(theme.Surface, "#FF161B22");
@@ -352,10 +442,291 @@ public static class ZftpThemeManager
         catch { font = new FontFamily("Segoe UI"); }
         resources["ZftpThemeFontFamily"] = font;
 
+        foreach (var pair in theme.Resources)
+        {
+            try
+            {
+                if (!ResourceBaselines.ContainsKey(pair.Key))
+                {
+                    var hadLocalValue = resources.Contains(pair.Key);
+                    ResourceBaselines[pair.Key] = new ResourceBaseline(hadLocalValue, hadLocalValue ? resources[pair.Key] : null);
+                }
+
+                if (!TryCreateResourceValue(pair.Key, pair.Value, out var value, out var error))
+                {
+                    warnings.Add($"{pair.Key}: {error}");
+                    continue;
+                }
+
+                resources[pair.Key] = value!;
+                ActiveResourceOverrides.Add(pair.Key);
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"{pair.Key}: {ex.Message}");
+            }
+        }
+
         window.WindowBackdropType = backdrop;
         window.Background = (Brush)resources["ZftpWindowBackgroundBrush"];
         window.Foreground = (Brush)resources["ZftpTextBrush"];
-        window.FontFamily = font;
+        window.FontFamily = resources["ZftpThemeFontFamily"] as FontFamily ?? font;
+        if (resources["ZftpBaseFontSize"] is double fontSize)
+            window.FontSize = fontSize;
+
+        return warnings;
+    }
+
+    private static void RestoreResourceOverrides(ResourceDictionary resources)
+    {
+        foreach (var key in ActiveResourceOverrides)
+        {
+            if (!ResourceBaselines.TryGetValue(key, out var baseline)) continue;
+            if (baseline.HadLocalValue)
+                resources[key] = baseline.Value!;
+            else
+                resources.Remove(key);
+        }
+        ActiveResourceOverrides.Clear();
+    }
+
+    private static bool TryCreateResourceValue(string key, JsonElement specification, out object? value, out string error)
+    {
+        string? explicitType = null;
+        var raw = specification;
+
+        if (specification.ValueKind == JsonValueKind.Object)
+        {
+            if (!TryGetProperty(specification, "value", out raw))
+            {
+                value = null;
+                error = "Typed resource objects require a Value property.";
+                return false;
+            }
+            if (TryGetProperty(specification, "type", out var typeElement) && typeElement.ValueKind == JsonValueKind.String)
+                explicitType = typeElement.GetString();
+        }
+
+        object? current = null;
+        try { current = Application.Current.TryFindResource(key); } catch { }
+
+        var type = explicitType?.Trim().ToLowerInvariant() ?? InferType(current);
+        if (string.IsNullOrWhiteSpace(type))
+        {
+            value = null;
+            error = "Unknown resource. Add an explicit Type (Brush, Color, Double, Thickness, CornerRadius, FontFamily, FontWeight, GridLength, Boolean, String, or Enum).";
+            return false;
+        }
+
+        try
+        {
+            switch (type)
+            {
+                case "brush":
+                case "solidcolorbrush":
+                    if (!TryString(raw, out var brushText) || !ThemeCatalog.TryColor(brushText, out var brushColor))
+                        throw new FormatException("Expected a color such as #RRGGBB or #AARRGGBB.");
+                    var brush = new SolidColorBrush(brushColor);
+                    brush.Freeze();
+                    value = brush;
+                    break;
+
+                case "color":
+                    if (!TryString(raw, out var colorText) || !ThemeCatalog.TryColor(colorText, out var color))
+                        throw new FormatException("Expected a color such as #RRGGBB or #AARRGGBB.");
+                    value = color;
+                    break;
+
+                case "double":
+                case "number":
+                    value = ReadDouble(raw);
+                    break;
+
+                case "int":
+                case "integer":
+                    value = checked((int)Math.Round(ReadDouble(raw)));
+                    break;
+
+                case "thickness":
+                    value = ReadThickness(raw);
+                    break;
+
+                case "cornerradius":
+                case "corner-radius":
+                    value = ReadCornerRadius(raw);
+                    break;
+
+                case "fontfamily":
+                case "font-family":
+                    value = new FontFamily(ReadString(raw));
+                    break;
+
+                case "fontweight":
+                case "font-weight":
+                    value = ReadFontWeight(raw);
+                    break;
+
+                case "gridlength":
+                case "grid-length":
+                    value = ReadGridLength(raw);
+                    break;
+
+                case "bool":
+                case "boolean":
+                    value = ReadBoolean(raw);
+                    break;
+
+                case "string":
+                    value = ReadString(raw);
+                    break;
+
+                case "enum":
+                    if (current is null || !current.GetType().IsEnum)
+                        throw new FormatException("Enum overrides require an existing enum resource so its enum type can be inferred.");
+                    value = Enum.Parse(current.GetType(), ReadString(raw), ignoreCase: true);
+                    break;
+
+                case "resource":
+                    var referencedKey = ReadString(raw);
+                    value = Application.Current.TryFindResource(referencedKey)
+                            ?? throw new KeyNotFoundException($"Resource '{referencedKey}' was not found.");
+                    break;
+
+                default:
+                    throw new FormatException($"Unsupported resource type '{explicitType ?? type}'.");
+            }
+
+            error = "";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            value = null;
+            error = ex.Message;
+            return false;
+        }
+    }
+
+    private static string? InferType(object? value) => value switch
+    {
+        SolidColorBrush => "brush",
+        Color => "color",
+        double or float or decimal => "double",
+        int or long or short => "integer",
+        Thickness => "thickness",
+        CornerRadius => "cornerradius",
+        FontFamily => "fontfamily",
+        FontWeight => "fontweight",
+        GridLength => "gridlength",
+        bool => "boolean",
+        string => "string",
+        Enum => "enum",
+        _ => null,
+    };
+
+    private static bool TryGetProperty(JsonElement element, string name, out JsonElement value)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (property.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+        value = default;
+        return false;
+    }
+
+    private static bool TryString(JsonElement element, out string value)
+    {
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            value = element.GetString() ?? "";
+            return true;
+        }
+        value = "";
+        return false;
+    }
+
+    private static string ReadString(JsonElement element) =>
+        TryString(element, out var value) ? value : throw new FormatException("Expected a string value.");
+
+    private static double ReadDouble(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out var number)) return number;
+        if (TryString(element, out var text) && double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number)) return number;
+        throw new FormatException("Expected a number.");
+    }
+
+    private static bool ReadBoolean(JsonElement element)
+    {
+        if (element.ValueKind is JsonValueKind.True or JsonValueKind.False) return element.GetBoolean();
+        if (TryString(element, out var text) && bool.TryParse(text, out var value)) return value;
+        throw new FormatException("Expected true or false.");
+    }
+
+    private static double[] ReadNumberList(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Number) return new[] { ReadDouble(element) };
+        var text = ReadString(element);
+        var values = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(part => double.Parse(part, NumberStyles.Float, CultureInfo.InvariantCulture))
+            .ToArray();
+        return values.Length > 0 ? values : throw new FormatException("Expected one or more comma-separated numbers.");
+    }
+
+    private static Thickness ReadThickness(JsonElement element)
+    {
+        var values = ReadNumberList(element);
+        return values.Length switch
+        {
+            1 => new Thickness(values[0]),
+            2 => new Thickness(values[0], values[1], values[0], values[1]),
+            4 => new Thickness(values[0], values[1], values[2], values[3]),
+            _ => throw new FormatException("Thickness expects 1, 2, or 4 values."),
+        };
+    }
+
+    private static CornerRadius ReadCornerRadius(JsonElement element)
+    {
+        var values = ReadNumberList(element);
+        return values.Length switch
+        {
+            1 => new CornerRadius(values[0]),
+            4 => new CornerRadius(values[0], values[1], values[2], values[3]),
+            _ => throw new FormatException("CornerRadius expects 1 or 4 values."),
+        };
+    }
+
+    private static FontWeight ReadFontWeight(JsonElement element) => ReadString(element).Trim().ToLowerInvariant() switch
+    {
+        "thin" => FontWeights.Thin,
+        "extralight" or "extra-light" => FontWeights.ExtraLight,
+        "light" => FontWeights.Light,
+        "normal" or "regular" => FontWeights.Normal,
+        "medium" => FontWeights.Medium,
+        "semibold" or "semi-bold" => FontWeights.SemiBold,
+        "bold" => FontWeights.Bold,
+        "extrabold" or "extra-bold" => FontWeights.ExtraBold,
+        "black" or "heavy" => FontWeights.Black,
+        _ => throw new FormatException("Unknown font weight."),
+    };
+
+    private static GridLength ReadGridLength(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Number) return new GridLength(ReadDouble(element));
+        var text = ReadString(element).Trim();
+        if (text.Equals("Auto", StringComparison.OrdinalIgnoreCase)) return GridLength.Auto;
+        if (text.EndsWith('*'))
+        {
+            var weightText = text[..^1];
+            var weight = string.IsNullOrWhiteSpace(weightText)
+                ? 1
+                : double.Parse(weightText, NumberStyles.Float, CultureInfo.InvariantCulture);
+            return new GridLength(weight, GridUnitType.Star);
+        }
+        return new GridLength(double.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture));
     }
 
     private static SolidColorBrush Brush(string value, string fallback)

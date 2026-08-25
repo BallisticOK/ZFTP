@@ -124,7 +124,7 @@ public partial class MainWindow : FluentWindow
             Name = "New Server",
             DriveLetter = AvailableDriveLetters().LastOrDefault() ?? "Z",
         };
-        var dlg = new EditDriveWindow(profile, DriveOptions(profile)) { Owner = this };
+        var dlg = new EditDriveWindow(profile, DriveOptions(profile)) { Owner = this, WindowBackdropType = this.WindowBackdropType };
         if (dlg.ShowDialog() == true)
         {
             var item = new ServerItem(dlg.Result);
@@ -145,7 +145,7 @@ public partial class MainWindow : FluentWindow
 
         // Edit a copy; only commit if the user saves.
         var working = item.Profile.Clone();
-        var dlg = new EditDriveWindow(working, DriveOptions(item.Profile)) { Owner = this };
+        var dlg = new EditDriveWindow(working, DriveOptions(item.Profile)) { Owner = this, WindowBackdropType = this.WindowBackdropType };
         if (dlg.ShowDialog() == true)
         {
             bool wasMounted = item.IsMounted;
@@ -316,12 +316,12 @@ public partial class MainWindow : FluentWindow
         int mounted = _servers.Count(s => s.IsMounted);
         if (mounted > 0)
         {
-            GlobalStatusDot.Fill = Brushes.LimeGreen;
+            GlobalStatusDot.Fill = Application.Current.TryFindResource("ZftpSuccessBrush") as Brush ?? Brushes.LimeGreen;
             GlobalStatusText.Text = $"{mounted} drive{(mounted == 1 ? "" : "s")} mounted";
         }
         else
         {
-            GlobalStatusDot.Fill = Brushes.Gray;
+            GlobalStatusDot.Fill = Application.Current.TryFindResource("ZftpStoppedBrush") as Brush ?? Brushes.Gray;
             GlobalStatusText.Text = "Idle — no drives mounted";
         }
         UpdateTrayText();
@@ -392,8 +392,10 @@ public partial class MainWindow : FluentWindow
     {
         if (_loadingSettings) return;
         if (ThemeCombo.SelectedItem is not ThemeDefinition theme) return;
-        ZftpThemeManager.Apply(theme, this);
-        UpdateThemeDetails(theme, Array.Empty<string>());
+        var warnings = ZftpThemeManager.Apply(theme, this);
+        foreach (var item in _servers) item.RefreshAll();
+        RefreshGlobalStatus();
+        UpdateThemeDetails(theme, warnings);
         _settings.Theme = theme.Id;
         _settings.Save();
     }
@@ -412,8 +414,10 @@ public partial class MainWindow : FluentWindow
 
         if (selected != null)
         {
-            ZftpThemeManager.Apply(selected, this);
-            UpdateThemeDetails(selected, result.Errors);
+            var warnings = ZftpThemeManager.Apply(selected, this);
+            foreach (var item in _servers) item.RefreshAll();
+            RefreshGlobalStatus();
+            UpdateThemeDetails(selected, result.Errors.Concat(warnings).ToArray());
         }
     }
 
@@ -429,8 +433,8 @@ public partial class MainWindow : FluentWindow
     {
         ThemeDescriptionText.Text = $"{theme.Description}  —  by {theme.Author}";
         ThemeSourceText.Text = errors.Count == 0
-            ? $"{(theme.IsBuiltIn ? "Built-in theme" : "Local theme")}. Drop .json themes into {ThemeCatalog.ThemeFolderPath}. ZFTP watches the folder automatically."
-            : $"Loaded with {errors.Count} invalid local theme file{(errors.Count == 1 ? "" : "s")} skipped. Open the theme folder to fix them.";
+            ? $"{(theme.IsBuiltIn ? "Built-in theme" : "Local theme")} · schema {theme.SchemaVersion}. Advanced Resources overrides can restyle colors, typography, spacing, sizing and WPF/UI resource tokens."
+            : $"Theme loaded with {errors.Count} warning{(errors.Count == 1 ? "" : "s")}. Open the theme folder to inspect invalid files or resource overrides.";
     }
 
     private void SetupThemeWatcher()
@@ -466,6 +470,22 @@ public partial class MainWindow : FluentWindow
 
     private void ReloadThemes_Click(object sender, RoutedEventArgs e) =>
         ReloadThemes((ThemeCombo.SelectedItem as ThemeDefinition)?.Id ?? _settings.Theme);
+
+    private void CreateTheme_Click(object sender, RoutedEventArgs e)
+    {
+        if (ThemeCombo.SelectedItem is not ThemeDefinition source) return;
+
+        try
+        {
+            var path = ThemeCatalog.CreateCustomCopy(source);
+            ReloadThemes(Path.GetFileNameWithoutExtension(path));
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            ThemeSourceText.Text = $"Could not create the custom theme: {ex.Message}";
+        }
+    }
 
     private void OpenThemesFolder_Click(object sender, RoutedEventArgs e)
     {

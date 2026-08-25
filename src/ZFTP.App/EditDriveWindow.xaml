@@ -2,11 +2,15 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-        Title="Edit drive" Height="760" Width="640"
-        MinHeight="580" MinWidth="560"
+        Title="Edit drive" Height="{DynamicResource ZftpDialogHeight}" Width="{DynamicResource ZftpDialogWidth}"
+        MinHeight="{DynamicResource ZftpDialogMinHeight}" MinWidth="{DynamicResource ZftpDialogMinWidth}"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica"
         ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource ZftpWindowBackgroundBrush}"
+        Foreground="{DynamicResource ZftpTextBrush}"
+        FontFamily="{DynamicResource ZftpThemeFontFamily}"
+        FontSize="{DynamicResource ZftpBaseFontSize}"
         WindowStartupLocation="CenterOwner">
 
     <Grid>
@@ -19,7 +23,7 @@
         <ui:TitleBar Grid.Row="0" Title="Drive settings" ShowMaximize="False" ShowMinimize="False" />
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                      PanningMode="VerticalOnly" Padding="22,8,22,8">
+                      PanningMode="VerticalOnly" Padding="{DynamicResource ZftpDialogContentPadding}">
             <StackPanel>
                 <TextBlock Text="Type" Margin="0,0,0,4" />
                 <ComboBox x:Name="TypeCombo" Margin="0,0,0,14" SelectionChanged="TypeCombo_SelectionChanged">
@@ -320,7 +324,7 @@
             </StackPanel>
         </ScrollViewer>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="22,10,22,16">
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="{DynamicResource ZftpDialogFooterMargin}">
             <ui:Button Content="Cancel" MinWidth="90" Click="Cancel_Click" />
             <ui:Button Content="Save" Appearance="Primary" MinWidth="90" Margin="10,0,0,0" Click="Save_Click" />
         </StackPanel>

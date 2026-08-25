@@ -29,10 +29,51 @@
             <SolidColorBrush x:Key="ZftpSuccessBrush" Color="#4ADE80" />
             <SolidColorBrush x:Key="ZftpWarningBrush" Color="#FBBF24" />
             <SolidColorBrush x:Key="ZftpErrorBrush" Color="#FB7185" />
+            <SolidColorBrush x:Key="ZftpStoppedBrush" Color="#808080" />
+            <SolidColorBrush x:Key="ZftpDownloadBrush" Color="#4FC3F7" />
+            <SolidColorBrush x:Key="ZftpUploadBrush" Color="#81C784" />
             <CornerRadius x:Key="ZftpCornerRadius">10</CornerRadius>
             <CornerRadius x:Key="ZftpSmallCornerRadius">5</CornerRadius>
             <system:Double x:Key="ZftpRowHeight">48</system:Double>
             <FontFamily x:Key="ZftpThemeFontFamily">Segoe UI</FontFamily>
+
+            <!-- Layout and typography tokens. Schema v2 themes can override any of
+                 these through their Resources object. Keep layout values as
+                 resources rather than literals so a theme can reshape the app. -->
+            <system:Double x:Key="ZftpBaseFontSize">13</system:Double>
+            <system:Double x:Key="ZftpMicroFontSize">11</system:Double>
+            <system:Double x:Key="ZftpCaptionFontSize">12</system:Double>
+            <system:Double x:Key="ZftpItemTitleFontSize">14</system:Double>
+            <system:Double x:Key="ZftpIconFontSize">18</system:Double>
+            <system:Double x:Key="ZftpSectionFontSize">18</system:Double>
+            <system:Double x:Key="ZftpWindowWidth">1120</system:Double>
+            <system:Double x:Key="ZftpWindowHeight">700</system:Double>
+            <system:Double x:Key="ZftpWindowMinWidth">900</system:Double>
+            <system:Double x:Key="ZftpWindowMinHeight">560</system:Double>
+            <system:Double x:Key="ZftpDialogWidth">640</system:Double>
+            <system:Double x:Key="ZftpDialogHeight">760</system:Double>
+            <system:Double x:Key="ZftpDialogMinWidth">560</system:Double>
+            <system:Double x:Key="ZftpDialogMinHeight">580</system:Double>
+            <system:Double x:Key="ZftpSettingsMaxWidth">680</system:Double>
+            <system:Double x:Key="ZftpThemeSelectorMinWidth">220</system:Double>
+            <system:Double x:Key="ZftpActionPanelMinWidth">120</system:Double>
+
+            <Thickness x:Key="ZftpTabMargin">8,4,8,4</Thickness>
+            <Thickness x:Key="ZftpMainPageMargin">6,12,6,6</Thickness>
+            <Thickness x:Key="ZftpPageMargin">20,20,20,16</Thickness>
+            <Thickness x:Key="ZftpSectionMargin">0,12,0,12</Thickness>
+            <Thickness x:Key="ZftpCardMargin">0,0,0,10</Thickness>
+            <Thickness x:Key="ZftpCardPadding">16,14</Thickness>
+            <Thickness x:Key="ZftpFooterCardMargin">0,8,0,0</Thickness>
+            <Thickness x:Key="ZftpFooterCardPadding">16,12</Thickness>
+            <Thickness x:Key="ZftpListHeaderMargin">22,12,20,8</Thickness>
+            <Thickness x:Key="ZftpListPadding">6,6</Thickness>
+            <Thickness x:Key="ZftpActionPanelMargin">12,0,0,0</Thickness>
+            <Thickness x:Key="ZftpStatusBarPadding">12,6</Thickness>
+            <Thickness x:Key="ZftpDialogContentPadding">22,8,22,8</Thickness>
+            <Thickness x:Key="ZftpDialogFooterMargin">22,10,22,16</Thickness>
+            <Thickness x:Key="ZftpFormFieldMargin">0,0,0,14</Thickness>
+            <Thickness x:Key="ZftpCompactCardPadding">14</Thickness>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
