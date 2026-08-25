@@ -12,7 +12,7 @@
 
 <br/>
 
-[![version](https://img.shields.io/badge/version-2.7.8-2D7DD2?style=for-the-badge)](https://github.com/BallisticOK/ZFTP/releases)
+[![version](https://img.shields.io/badge/version-2.7.9-2D7DD2?style=for-the-badge)](https://github.com/BallisticOK/ZFTP/releases)
 [![platform](https://img.shields.io/badge/Windows%2010%20%2F%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/BallisticOK/ZFTP/releases)
 [![.NET 8](https://img.shields.io/badge/.NET%208%20%2B%20WPF-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![price](https://img.shields.io/badge/price-%240.00%20forever-22C55E?style=for-the-badge)](#-why-it-exists)
@@ -106,7 +106,7 @@ It started as an SFTP tool. It now mounts **eleven kinds of storage** through on
 
 | Provider | Engine | Auth | Notes |
 |---|:---:|---|---|
-| **SFTP** | 🟢 Native (SSH.NET) | Password / SSH key | Full read/write, host-key pinning, real drive size via `df` |
+| **SFTP** | 🟢 Native (SSH.NET) | Password / SSH key | Full read/write, host-key pinning, real drive size via SFTP `statvfs` |
 | **FTP** | 🔵 rclone | Password | Plain FTP |
 | **FTPS** | 🔵 rclone | Password | FTP over TLS |
 | **WebDAV** | 🔵 rclone | Password | Nextcloud, ownCloud, generic DAV |
@@ -225,7 +225,7 @@ graph TD
 
 <br/>
 
-- **SFTP** is fully native via SSH.NET, with a short-lived attribute cache so browsing a folder doesn't re-stat every file over the wire, plus a background `df` probe so Explorer shows the drive's *real* size.
+- **SFTP** is fully native via SSH.NET, with a short-lived attribute cache so browsing a folder doesn't re-stat every file over the wire, plus the SFTP `statvfs` extension so Explorer shows the drive's *real* size without opening a shell.
 - **Android** talks over `adb`. Since adb only does whole-file `pull`/`push` (no random access), it uses a **download-on-open / upload-on-close temp cache** — open a big video, brief copy, then it's instant. adb's background server is **killed when no Android drive is mounted** so it never blocks an update.
 - **iPhone** uses Apple's AFC channel, which *does* give real seek/read/write handles — so it reads and writes **directly**, no temp cache.
 - **Cloud drives** use rclone's VFS cache (`--vfs-cache-mode full`) and background tree-walk (`--vfs-refresh`) so folders open instantly instead of stalling on a slow API call.

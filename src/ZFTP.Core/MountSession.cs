@@ -553,6 +553,34 @@ public sealed class MountSession : IDisposable
                 root = string.IsNullOrEmpty(_client.WorkingDirectory) ? "/" : _client.WorkingDirectory;
 
             _fs = new SftpFileSystem(_client, root, Profile.Name, Profile.Access == AccessMode.ReadOnly);
+
+            // Ask the SFTP server itself for filesystem capacity before WinFsp starts
+            // serving requests. SSH.NET maps this to OpenSSH's statvfs extension, so
+            // we get the real filesystem size without opening a second SSH shell or
+            // running `df` (the old shell probe could fault during channel teardown).
+            // Not every SFTP server implements statvfs, so capacity remains best-effort.
+            try
+            {
+                var volume = _client.GetStatus(root);
+                ulong blockSize = volume.BlockSize != 0
+                    ? volume.BlockSize
+                    : volume.FileSystemBlockSize;
+                long totalBytes = BlocksToBytes(volume.TotalBlocks, blockSize);
+                long freeBytes = BlocksToBytes(volume.AvailableBlocks, blockSize);
+
+                if (totalBytes > 0)
+                {
+                    _fs.UpdateVolumeSpace(totalBytes, freeBytes);
+                    AppLog.Info("Mount:SFTP",
+                        $"Remote capacity for '{Profile.Name}': total={totalBytes} bytes, available={freeBytes} bytes, blockSize={blockSize}.");
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("Mount:SFTP",
+                    $"Server did not provide SFTP filesystem capacity for '{Profile.Name}'; using the fallback size. {ex.Message}");
+            }
+
             _host = new FileSystemHost(_fs)
             {
                 SectorSize = 4096,
@@ -590,11 +618,6 @@ public sealed class MountSession : IDisposable
             LastError = null;
             _shouldBeMounted = true;
             SetState(MountState.Mounted);
-
-            // Deliberately avoid opening a second SSH shell just to run `df`.
-            // SSH.NET 2026 can leave an internal command task faulted when that
-            // auxiliary channel is torn down. SFTP mounting itself does not need
-            // shell access, so keep capacity reporting on the safe placeholder.
             return true;
         }
         catch (Exception ex)
@@ -605,6 +628,19 @@ public sealed class MountSession : IDisposable
             SetState(MountState.Error);
             return false;
         }
+    }
+
+    private static long BlocksToBytes(ulong blocks, ulong blockSize)
+    {
+        if (blocks == 0 || blockSize == 0) return 0;
+
+        // WinFsp's volume fields are ulong, but SftpFileSystem stores values in
+        // long so Interlocked can update them atomically. Saturate instead of
+        // wrapping if a server reports a fantastically large filesystem.
+        ulong max = (ulong)long.MaxValue;
+        return blocks > max / blockSize
+            ? long.MaxValue
+            : (long)(blocks * blockSize);
     }
 
     public void Unmount()

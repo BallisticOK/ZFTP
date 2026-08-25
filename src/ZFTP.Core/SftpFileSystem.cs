@@ -49,12 +49,12 @@ public sealed class SftpFileSystem : FileSystemBase
     private const long AttrCacheTtlMs = 15_000;
     private readonly Dictionary<string, (SftpFileAttributes attr, long expires)> _attrCache = new();
 
-    // Real volume size, filled in by MountSession from a `df` probe. Defaults to
-    // a large fixed size until (and unless) we learn the truth from the server.
+    // Real volume size, filled in by MountSession from the SFTP statvfs extension.
+    // Defaults to a large fixed size until (and unless) the server reports it.
     private long _totalBytes = 1L << 42;     // 4 TB placeholder
     private long _freeBytes = 1L << 41;      // 2 TB placeholder
 
-    /// <summary>Update the advertised drive size (called with real numbers from `df`).</summary>
+    /// <summary>Update the advertised drive size from the server's filesystem status.</summary>
     public void UpdateVolumeSpace(long totalBytes, long freeBytes)
     {
         if (totalBytes <= 0) return;
@@ -205,8 +205,8 @@ public sealed class SftpFileSystem : FileSystemBase
     public override int GetVolumeInfo(out VolumeInfo volumeInfo)
     {
         volumeInfo = default;
-        // Real size from the server's `df` (filled in by MountSession). Falls back
-        // to a large placeholder if the server didn't let us run df.
+        // Real size from the server's statvfs response (filled in by MountSession).
+        // Falls back to a large placeholder if the server does not support it.
         volumeInfo.TotalSize = (ulong)Interlocked.Read(ref _totalBytes);
         volumeInfo.FreeSize = (ulong)Interlocked.Read(ref _freeBytes);
         volumeInfo.SetVolumeLabel(_volumeLabel);     // shows as the drive name in Explorer
