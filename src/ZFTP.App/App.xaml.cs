@@ -1,3 +1,4 @@
+using System.Security.Principal;
 using System.Threading;
 using ZFTP.Core;
 using Application = System.Windows.Application;
@@ -35,6 +36,27 @@ public partial class App : Application
         AppLog.Initialize();
         AppLog.Info("App", "Primary application instance acquired.");
 
+        // WinFsp drive letters live in the launching user's DOS-device namespace.
+        // If ZFTP is elevated while Explorer is not (normal UAC behavior), ZFTP
+        // can successfully mount a drive that Explorer cannot see. ZFTP never
+        // needs admin rights, so stop clearly instead of reporting a misleading
+        // "Mounted" state for an elevated-only drive.
+        bool elevated = IsProcessElevated();
+        AppLog.Info("App", $"Process elevated={elevated}.");
+        if (elevated)
+        {
+            AppLog.Warn("App",
+                "ZFTP was launched as Administrator. Mounted drive letters would be invisible to normal Windows Explorer, so startup was stopped.");
+            System.Windows.MessageBox.Show(
+                "ZFTP is running as Administrator. Windows Explorer normally runs without elevation, so drives mounted by this copy of ZFTP would not appear in This PC.\n\n" +
+                "Close this message and launch ZFTP normally from the Start menu or desktop shortcut. ZFTP does not need administrator rights.",
+                "ZFTP must run normally",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            Shutdown();
+            return;
+        }
+
         // Load WinFsp's native DLL up front so mounting works even when ZFTP is
         // published as a self-contained app, and move any old ProgramData config
         // into the current per-user AppData\ZFTP folder.
@@ -63,6 +85,19 @@ public partial class App : Application
 
         StartHidden = e.Args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
         base.OnStartup(e);
+    }
+
+    private static bool IsProcessElevated()
+    {
+        try
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

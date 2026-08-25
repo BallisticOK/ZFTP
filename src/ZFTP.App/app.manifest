@@ -3,6 +3,14 @@
   <!-- ZFTP runs as a normal user (no admin needed — WinFsp handles the driver side). -->
   <assemblyIdentity version="1.0.0.0" name="ZFTP.App" />
 
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>
       <!-- Windows 10 and 11 -->
