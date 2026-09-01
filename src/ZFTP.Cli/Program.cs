@@ -1,3 +1,4 @@
+using System.Reflection;
 using ZFTP.Portable;
 
 return await Cli.RunAsync(args);
@@ -168,7 +169,8 @@ internal static class Cli
 
     private static int Version()
     {
-        Console.WriteLine("ZFTP CLI 2.7.9");
+        var version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "unknown";
+        Console.WriteLine($"ZFTP CLI {version}");
         return 0;
     }
 

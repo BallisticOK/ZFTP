@@ -6,7 +6,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>zftp</AssemblyName>
     <RootNamespace>ZFTP.Cli</RootNamespace>
-    <Version>2.7.9</Version>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ZFTP.Portable\ZFTP.Portable.csproj" />

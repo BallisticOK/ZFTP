@@ -2,41 +2,64 @@ name: Portable builds
 
 on:
   push:
-    branches: [ main ]
+    branches: [windows, main]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   linux-cli:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        rid: [linux-x64, linux-arm64]
+        include:
+          - rid: linux-x64
+            asset: zftp-linux-x64
+          - rid: linux-arm64
+            asset: zftp-linux-arm64
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
       - name: Publish Linux CLI
-        run: dotnet publish src/ZFTP.Cli/ZFTP.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -o dist/${{ matrix.rid }}
-      - uses: actions/upload-artifact@v4
+        run: |
+          dotnet publish src/ZFTP.Cli/ZFTP.Cli.csproj \
+            -c Release -r "${{ matrix.rid }}" --self-contained true \
+            -p:PublishSingleFile=true -o "dist/${{ matrix.rid }}"
+          mv "dist/${{ matrix.rid }}/zftp" "dist/${{ matrix.rid }}/${{ matrix.asset }}"
+          chmod +x "dist/${{ matrix.rid }}/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v7
         with:
           name: ZFTP-${{ matrix.rid }}
-          path: dist/${{ matrix.rid }}/zftp
+          path: dist/${{ matrix.rid }}/${{ matrix.asset }}
+          if-no-files-found: error
 
   mac-gui:
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         rid: [osx-arm64, osx-x64]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
       - name: Build macOS app bundle
-        run: bash scripts/package-macos.sh ${{ matrix.rid }}
-      - uses: actions/upload-artifact@v4
+        run: bash scripts/package-macos.sh "${{ matrix.rid }}"
+      - uses: actions/upload-artifact@v7
         with:
           name: ZFTP-${{ matrix.rid }}
           path: dist/ZFTP-macOS-*.zip
+          if-no-files-found: error
+
+  installer-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate Linux installer shell syntax
+        run: bash -n scripts/install-linux.sh

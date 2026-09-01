@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
+$versionProps = Join-Path $repo 'Directory.Build.props'
 $appProject = Join-Path $repo 'src\ZFTP.App\ZFTP.App.csproj'
 $updaterProject = Join-Path $repo 'src\ZFTP.Updater\ZFTP.Updater.csproj'
 $installerProject = Join-Path $repo 'src\ZFTP.Installer\ZFTP.Installer.csproj'
@@ -16,8 +17,8 @@ $prereqDir = Join-Path $PSScriptRoot 'prereqs'
 $dist = Join-Path $repo 'dist'
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $versionMatch = Select-String -Path $appProject -Pattern '<Version>([^<]+)</Version>' | Select-Object -First 1
-    if (-not $versionMatch) { throw 'Could not read the ZFTP version from ZFTP.App.csproj.' }
+    $versionMatch = Select-String -Path $versionProps -Pattern '<Version>([^<]+)</Version>' | Select-Object -First 1
+    if (-not $versionMatch) { throw 'Could not read the ZFTP version from Directory.Build.props.' }
     $Version = $versionMatch.Matches[0].Groups[1].Value
 }
 

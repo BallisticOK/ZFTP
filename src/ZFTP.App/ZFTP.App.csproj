@@ -22,9 +22,6 @@
     <SelfContained>false</SelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>zftp.ico</ApplicationIcon>
-    <Version>2.7.9</Version>
-    <FileVersion>2.7.9.0</FileVersion>
-    <AssemblyVersion>2.7.9.0</AssemblyVersion>
     <Company>ZFTP</Company>
     <Product>ZFTP</Product>
   </PropertyGroup>

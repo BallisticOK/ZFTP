@@ -5,6 +5,5 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ZFTP.Portable</AssemblyName>
     <RootNamespace>ZFTP.Portable</RootNamespace>
-    <Version>2.7.9</Version>
   </PropertyGroup>
 </Project>

@@ -1,9 +1,7 @@
 name: Release
 
-# Push a tag like "v2.7.4" to build the installer and publish a GitHub Release
-# with it attached, with release notes generated from the commits since the
-# previous tag. `workflow_dispatch` lets you run the same pipeline manually
-# (e.g. to test it) without needing a real tag.
+# One release tag produces permanent downloads for every supported platform.
+# Example: v2.8.0
 on:
   push:
     tags:
@@ -11,47 +9,59 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build (e.g. 2.6.2) - only used for manual runs"
+        description: "Version to release (must match Directory.Build.props, e.g. 2.8.0)"
         required: true
 
 permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag_name: ${{ steps.version.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Validate release version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ github.event.inputs.version }}"
+            tag_name="v$version"
+          else
+            tag_name="${{ github.ref_name }}"
+            version="${tag_name#v}"
+          fi
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release version must use major.minor.patch format." >&2
+            exit 1
+          fi
+
+          source_version="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' Directory.Build.props | head -n 1)"
+          if [[ "$source_version" != "$version" ]]; then
+            echo "Release version $version does not match source version $source_version in Directory.Build.props." >&2
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
+
+  windows-installer:
+    needs: metadata
     runs-on: windows-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0 # full history, needed to diff against the previous tag
-          fetch-tags: true
-
-      - name: Determine version
-        id: version
-        shell: pwsh
-        run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $version = "${{ github.event.inputs.version }}"
-            $tagName = "v$version"
-          } else {
-            $tagName = "${{ github.ref_name }}"
-            $version = $tagName.TrimStart("v")
-          }
-
-          if ($version -notmatch '^\d+\.\d+\.\d+$') {
-            throw "Release version must use major.minor.patch format (for example, 2.7.4)."
-          }
-
-          "version=$version" >> $env:GITHUB_OUTPUT
-          "tag_name=$tagName" >> $env:GITHUB_OUTPUT
-
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
 
-      - name: Download WinFsp installer
+      - name: Download WinFsp for the build environment
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path prereqs | Out-Null
@@ -64,64 +74,161 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install WinFsp
+      - name: Install WinFsp for compilation
         shell: pwsh
         run: |
-          # Needed so ZFTP.Core's HintPath reference to winfsp-msil.dll resolves during build.
           $proc = Start-Process msiexec.exe -ArgumentList "/i", "$($pwd)\prereqs\winfsp.msi", "/quiet", "/qn", "/norestart" -Wait -PassThru
           if ($proc.ExitCode -ne 0) { throw "WinFsp install failed with exit code $($proc.ExitCode)" }
 
-      - name: Build custom installer
+      - name: Build Windows installer
         shell: pwsh
-        run: ./installer/build-installer.ps1 -Version "${{ steps.version.outputs.version }}"
+        run: ./installer/build-installer.ps1 -Version "${{ needs.metadata.outputs.version }}"
 
-      - name: Generate changelog
-        id: changelog
-        shell: pwsh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-windows
+          path: dist/ZFTP-Setup-*.exe
+          if-no-files-found: error
+
+  linux-cli:
+    needs: metadata
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            asset: zftp-linux-x64
+          - rid: linux-arm64
+            asset: zftp-linux-arm64
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "8.0.x"
+      - name: Publish ${{ matrix.rid }} CLI
         run: |
-          $tag = "${{ steps.version.outputs.tag_name }}"
-          $prevTag = $null
-          if ("${{ github.event_name }}" -eq "push") {
-            $prevTag = git describe --tags --abbrev=0 "$tag^" 2>$null
-            if ($LASTEXITCODE -ne 0) { $prevTag = $null }
-          } else {
-            $prevTag = git describe --tags --abbrev=0 2>$null
-            if ($LASTEXITCODE -ne 0) { $prevTag = $null }
-          }
+          version="${{ needs.metadata.outputs.version }}"
+          dotnet publish src/ZFTP.Cli/ZFTP.Cli.csproj \
+            -c Release -r "${{ matrix.rid }}" --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:Version="$version" -p:FileVersion="$version.0" -p:AssemblyVersion="$version.0" \
+            -o "dist/${{ matrix.rid }}"
+          mkdir -p dist/release
+          mv "dist/${{ matrix.rid }}/zftp" "dist/release/${{ matrix.asset }}"
+          chmod +x "dist/release/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.rid }}
+          path: dist/release/${{ matrix.asset }}
+          if-no-files-found: error
 
-          if ($prevTag) {
-            $range = "$prevTag..HEAD"
-          } else {
-            $range = "-30" # first-ever release: just the most recent commits
-          }
-          $log = if ($range -eq "-30") { git log -30 --pretty=format:"%s|||%h" } else { git log $range --pretty=format:"%s|||%h" }
+  mac-gui:
+    needs: metadata
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [osx-arm64, osx-x64]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "8.0.x"
+      - name: Build ${{ matrix.rid }} app bundle
+        run: bash scripts/package-macos.sh "${{ matrix.rid }}" "${{ needs.metadata.outputs.version }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.rid }}
+          path: dist/ZFTP-macOS-*.zip
+          if-no-files-found: error
 
-          $added = @(); $fixed = @(); $changed = @(); $other = @()
-          foreach ($line in $log) {
-            if (-not $line) { continue }
-            $bits = $line -split '\|\|\|', 2
-            $msg = $bits[0]; $hash = $bits[1]
-            if ($msg -match '^\s*(feat|feature|add)(\(|:)') { $added += "- $msg ($hash)" }
-            elseif ($msg -match '^\s*fix(\(|:)') { $fixed += "- $msg ($hash)" }
-            elseif ($msg -match '^\s*(refactor|perf|chore|style|docs|build|ci)(\(|:)') { $changed += "- $msg ($hash)" }
-            else { $other += "- $msg ($hash)" }
-          }
+  publish-release:
+    needs: [metadata, windows-installer, linux-cli, mac-gui]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
-          $body = "## ZFTP $tag`n`n"
-          if ($added.Count)   { $body += "### Added`n" + ($added -join "`n") + "`n`n" }
-          if ($fixed.Count)   { $body += "### Fixed`n" + ($fixed -join "`n") + "`n`n" }
-          if ($changed.Count) { $body += "### Changed`n" + ($changed -join "`n") + "`n`n" }
-          if ($other.Count)   { $body += "### Other`n" + ($other -join "`n") + "`n`n" }
-          if (-not $prevTag)  { $body += "_Initial release._`n" }
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist/release
+          merge-multiple: true
 
-          $body | Out-File -FilePath changelog.md -Encoding utf8
+      - name: Add installer and checksums
+        shell: bash
+        run: |
+          cp scripts/install-linux.sh dist/release/install-linux.sh
+          chmod +x dist/release/install-linux.sh dist/release/zftp-linux-*
+          cd dist/release
+          sha256sum ZFTP-Setup-*.exe zftp-linux-* ZFTP-macOS-*.zip install-linux.sh > SHA256SUMS
+          cat SHA256SUMS
 
-      - name: Create GitHub Release
+      - name: Generate release notes
+        shell: bash
+        run: |
+          tag="${{ needs.metadata.outputs.tag_name }}"
+          version="${{ needs.metadata.outputs.version }}"
+          previous="$(git tag --sort=-v:refname | grep -Fxv "$tag" | head -n 1 || true)"
+
+          {
+            echo "## ZFTP $version"
+            echo
+            echo "### Quick install"
+            echo
+            echo 'Linux x64 / ARM64:'
+            echo '```bash'
+            echo 'curl -fsSL https://github.com/BallisticOK/ZFTP/releases/latest/download/install-linux.sh | bash'
+            echo '```'
+            echo
+            echo "The installer auto-detects CPU architecture, verifies the SHA-256 checksum, and installs \`zftp\` to \`~/.local/bin\`."
+            echo
+            echo "### Changes"
+            echo
+            if [[ -n "$previous" ]]; then
+              git log "$previous..HEAD" --pretty='- %s (`%h`)'
+            else
+              git log -30 --pretty='- %s (`%h`)'
+            fi
+          } > release-notes.md
+
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.version.outputs.tag_name }}
-          name: ZFTP ${{ steps.version.outputs.version }}
-          body_path: changelog.md
-          files: dist/ZFTP-Setup-*.exe
+          tag_name: ${{ needs.metadata.outputs.tag_name }}
+          target_commitish: ${{ github.sha }}
+          name: ZFTP ${{ needs.metadata.outputs.version }}
+          body_path: release-notes.md
+          make_latest: true
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          files: |
+            dist/release/ZFTP-Setup-*.exe
+            dist/release/zftp-linux-x64
+            dist/release/zftp-linux-arm64
+            dist/release/ZFTP-macOS-*.zip
+            dist/release/install-linux.sh
+            dist/release/SHA256SUMS
+
+      - name: Verify required release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ needs.metadata.outputs.tag_name }}"
+          assets="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          for required in \
+            "ZFTP-Setup-${{ needs.metadata.outputs.version }}.exe" \
+            zftp-linux-x64 zftp-linux-arm64 \
+            ZFTP-macOS-x64.zip ZFTP-macOS-arm64.zip \
+            install-linux.sh SHA256SUMS; do
+            if ! grep -Fxq "$required" <<< "$assets"; then
+              echo "Missing required release asset: $required" >&2
+              exit 1
+            fi
+          done

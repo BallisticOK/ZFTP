@@ -6,7 +6,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ZFTP</AssemblyName>
     <RootNamespace>ZFTP.Mac</RootNamespace>
-    <Version>2.7.9</Version>
     <RuntimeIdentifiers>osx-x64;osx-arm64</RuntimeIdentifiers>
   </PropertyGroup>
   <ItemGroup>

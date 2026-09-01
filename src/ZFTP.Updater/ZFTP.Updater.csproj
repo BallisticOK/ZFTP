@@ -15,7 +15,6 @@
     <SelfContained>false</SelfContained>
     <AssemblyName>ZFTP.Updater</AssemblyName>
     <ApplicationIcon>..\ZFTP.App\zftp.ico</ApplicationIcon>
-    <Version>2.7.6</Version>
   </PropertyGroup>
 
   <ItemGroup>

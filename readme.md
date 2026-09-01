@@ -12,7 +12,7 @@
 
 <br/>
 
-[![version](https://img.shields.io/badge/version-2.7.9-2D7DD2?style=for-the-badge)](https://github.com/BallisticOK/ZFTP/releases)
+[![version](https://img.shields.io/badge/version-2.8.0-2D7DD2?style=for-the-badge)](https://github.com/BallisticOK/ZFTP/releases)
 [![platform](https://img.shields.io/badge/Windows%2010%20%2F%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/BallisticOK/ZFTP/releases)
 [![.NET 8](https://img.shields.io/badge/.NET%208%20%2B%20WPF-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![price](https://img.shields.io/badge/price-%240.00%20forever-22C55E?style=for-the-badge)](#-why-it-exists)
@@ -301,7 +301,23 @@ The existing Windows application remains the WinFsp/WPF implementation. Cross-pl
 - `src/ZFTP.Cli` — Linux-first `zftp` command-line client.
 - `src/ZFTP.Mac` — macOS Avalonia GUI for Finder mounts.
 
-Linux requires `rclone` plus FUSE 3. After installing both:
+### Linux: one-command install
+
+The Linux CLI is published as a self-contained binary for **x64** and **ARM64** on every GitHub release. Install or upgrade it with:
+
+```bash
+curl -fsSL https://github.com/BallisticOK/ZFTP/releases/latest/download/install-linux.sh | bash
+```
+
+The installer auto-detects your CPU architecture, downloads the matching release asset, verifies it against the release `SHA256SUMS`, and installs `zftp` to `~/.local/bin`. It also tells you the exact package-manager command if `rclone` or FUSE 3 is missing.
+
+To install a specific release instead of the latest:
+
+```bash
+curl -fsSL https://github.com/BallisticOK/ZFTP/releases/latest/download/install-linux.sh | ZFTP_VERSION=2.8.0 bash
+```
+
+Then:
 
 ```bash
 zftp doctor
@@ -317,7 +333,7 @@ macOS requires `rclone` plus macFUSE. Configure the provider once with `rclone c
 
 Portable profiles are intentionally stored separately from the Windows GUI configuration. Linux uses `$XDG_CONFIG_HOME/zftp` (or `~/.config/zftp`), while macOS uses `~/Library/Application Support/ZFTP`.
 
-The portable CI workflow builds self-contained Linux x64/arm64 CLI binaries and macOS Intel/Apple Silicon `.app` bundles. A macOS bundle can also be created locally with `bash scripts/package-macos.sh osx-arm64` or `osx-x64`.
+Every tagged GitHub release permanently publishes the Windows installer, Linux x64/ARM64 CLI binaries, macOS Intel/Apple Silicon bundles, the Linux installer script, and `SHA256SUMS`. The portable CI workflow also builds the Linux/macOS artifacts on normal pushes and pull requests. A macOS bundle can be created locally with `bash scripts/package-macos.sh osx-arm64` or `osx-x64`.
 
 ---
 

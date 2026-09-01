@@ -91,7 +91,9 @@ public static class Updater
                 foreach (var a in assets.EnumerateArray())
                 {
                     var name = a.TryGetProperty("name", out var n) ? n.GetString() : null;
-                    if (name != null && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    if (name != null &&
+                        name.StartsWith("ZFTP-Setup-", StringComparison.OrdinalIgnoreCase) &&
+                        name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                     {
                         url = a.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
                         if (!string.IsNullOrEmpty(url)) break;
