@@ -293,6 +293,34 @@ application errors. It rotates at 5 MB to `zftp.previous.log`.
 
 ---
 
+## 🐧 Linux CLI + 🍎 macOS GUI
+
+The existing Windows application remains the WinFsp/WPF implementation. Cross-platform support is isolated in separate projects so the Windows GUI, installer, drive-letter engine, and `%AppData%\ZFTP\drives.json` format are not changed.
+
+- `src/ZFTP.Portable` — shared Linux/macOS rclone mount/profile backend.
+- `src/ZFTP.Cli` — Linux-first `zftp` command-line client.
+- `src/ZFTP.Mac` — macOS Avalonia GUI for Finder mounts.
+
+Linux requires `rclone` plus FUSE 3. After installing both:
+
+```bash
+zftp doctor
+zftp config
+zftp remotes
+zftp add --name MyDrive --remote myremote --auto
+zftp mount MyDrive
+```
+
+Use `zftp mount --auto` for all profiles marked for auto-mount, `zftp status` to see what is mounted, and `zftp unmount --all` to disconnect everything.
+
+macOS requires `rclone` plus macFUSE. Configure the provider once with `rclone config`, open ZFTP, click **Refresh**, choose the rclone remote, and add the drive. Mounts default to `~/ZFTP/<drive name>` and can be opened directly in Finder.
+
+Portable profiles are intentionally stored separately from the Windows GUI configuration. Linux uses `$XDG_CONFIG_HOME/zftp` (or `~/.config/zftp`), while macOS uses `~/Library/Application Support/ZFTP`.
+
+The portable CI workflow builds self-contained Linux x64/arm64 CLI binaries and macOS Intel/Apple Silicon `.app` bundles. A macOS bundle can also be created locally with `bash scripts/package-macos.sh osx-arm64` or `osx-x64`.
+
+---
+
 ## 🛠️ Build from source
 
 You'll need the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) and [WinFsp](https://winfsp.dev/).

@@ -1,0 +1,42 @@
+name: Portable builds
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux-cli:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rid: [linux-x64, linux-arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish Linux CLI
+        run: dotnet publish src/ZFTP.Cli/ZFTP.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -o dist/${{ matrix.rid }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZFTP-${{ matrix.rid }}
+          path: dist/${{ matrix.rid }}/zftp
+
+  mac-gui:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        rid: [osx-arm64, osx-x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build macOS app bundle
+        run: bash scripts/package-macos.sh ${{ matrix.rid }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZFTP-${{ matrix.rid }}
+          path: dist/ZFTP-macOS-*.zip

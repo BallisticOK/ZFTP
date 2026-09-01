@@ -1,0 +1,73 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ZFTP.Mac.MainWindow"
+        Title="ZFTP"
+        Width="920" Height="620"
+        MinWidth="760" MinHeight="520"
+        Background="#0B0F14">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="28">
+    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,20">
+      <StackPanel>
+        <TextBlock Text="ZFTP" FontSize="28" FontWeight="SemiBold" Foreground="#F5F7FA" />
+        <TextBlock Text="Mount your rclone storage in Finder" FontSize="13" Foreground="#8C9BAB" Margin="0,4,0,0" />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Button Content="Refresh" Click="Refresh_Click" />
+        <Button Content="Setup help" Click="SetupHelp_Click" />
+      </StackPanel>
+    </Grid>
+
+    <Grid Grid.Row="1" ColumnDefinitions="1.05*,1.25*">
+      <Border Background="#111820" BorderBrush="#202C38" BorderThickness="1" CornerRadius="12" Padding="16">
+        <Grid RowDefinitions="Auto,*,Auto">
+          <TextBlock Text="Drives" FontSize="16" FontWeight="SemiBold" Margin="2,0,0,12" />
+          <ListBox x:Name="ProfilesList" Grid.Row="1" SelectionChanged="ProfilesList_SelectionChanged">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid ColumnDefinitions="*,Auto" Margin="4,7">
+                  <StackPanel>
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding RemoteSpec}" Foreground="#8C9BAB" FontSize="12" />
+                  </StackPanel>
+                  <TextBlock Grid.Column="1" Text="{Binding MountPath}" Foreground="#6F8192" FontSize="11" VerticalAlignment="Center" MaxWidth="210" TextTrimming="CharacterEllipsis" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <Grid Grid.Row="2" ColumnDefinitions="*,*,*,*" ColumnSpacing="6" Margin="0,12,0,0">
+            <Button Content="Mount" Click="Mount_Click" />
+            <Button Grid.Column="1" Content="Unmount" Click="Unmount_Click" />
+            <Button Grid.Column="2" Content="Open" Click="Open_Click" />
+            <Button Grid.Column="3" Content="Delete" Click="Delete_Click" />
+          </Grid>
+        </Grid>
+      </Border>
+
+      <Border Grid.Column="1" Background="#111820" BorderBrush="#202C38" BorderThickness="1" CornerRadius="12" Padding="20" Margin="20,0,0,0">
+        <StackPanel Spacing="10">
+          <TextBlock Text="Add a drive" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,4" />
+          <TextBlock Text="Name" Foreground="#9DABBA" FontSize="12" />
+          <TextBox x:Name="NameBox" Watermark="My Server" />
+          <TextBlock Text="rclone remote" Foreground="#9DABBA" FontSize="12" Margin="0,4,0,0" />
+          <ComboBox x:Name="RemoteBox" />
+          <TextBlock Text="Remote folder (optional)" Foreground="#9DABBA" FontSize="12" Margin="0,4,0,0" />
+          <TextBox x:Name="RemotePathBox" Watermark="folder/subfolder" />
+          <TextBlock Text="Local mount folder" Foreground="#9DABBA" FontSize="12" Margin="0,4,0,0" />
+          <TextBox x:Name="MountPathBox" Watermark="~/ZFTP/My Server" />
+          <StackPanel Orientation="Horizontal" Spacing="18" Margin="0,5,0,0">
+            <CheckBox x:Name="ReadOnlyBox" Content="Read only" />
+            <CheckBox x:Name="AutoMountBox" Content="Auto-mount when ZFTP opens" />
+          </StackPanel>
+          <Button Content="Add drive" HorizontalAlignment="Stretch" Margin="0,8,0,0" Click="Add_Click" />
+          <Border Background="#0C1218" CornerRadius="8" Padding="12" Margin="0,8,0,0">
+            <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="12">ZFTP for macOS uses rclone + macFUSE. Configure providers in rclone first, then they appear in the remote list here. Your Windows ZFTP settings are never changed.</TextBlock>
+          </Border>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="2" Background="#101720" CornerRadius="8" Padding="12,9" Margin="0,16,0,0">
+      <TextBlock x:Name="StatusText" Text="Ready" Foreground="#93A5B5" FontSize="12" />
+    </Border>
+  </Grid>
+</Window>
