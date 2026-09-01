@@ -12,7 +12,7 @@
 
 <br/>
 
-[![version](https://img.shields.io/badge/version-2.8.0-2D7DD2?style=for-the-badge)](https://github.com/BallisticOK/ZFTP/releases)
+[![version](https://img.shields.io/badge/version-2.8.1-2D7DD2?style=for-the-badge)](https://github.com/BallisticOK/ZFTP/releases)
 [![platform](https://img.shields.io/badge/Windows%2010%20%2F%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/BallisticOK/ZFTP/releases)
 [![.NET 8](https://img.shields.io/badge/.NET%208%20%2B%20WPF-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![price](https://img.shields.io/badge/price-%240.00%20forever-22C55E?style=for-the-badge)](#-why-it-exists)
@@ -314,7 +314,7 @@ The installer auto-detects your CPU architecture, downloads the matching release
 To install a specific release instead of the latest:
 
 ```bash
-curl -fsSL https://github.com/BallisticOK/ZFTP/releases/latest/download/install-linux.sh | ZFTP_VERSION=2.8.0 bash
+curl -fsSL https://github.com/BallisticOK/ZFTP/releases/latest/download/install-linux.sh | ZFTP_VERSION=2.8.1 bash
 ```
 
 Then:

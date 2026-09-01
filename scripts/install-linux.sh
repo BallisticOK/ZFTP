@@ -19,7 +19,7 @@ case "$(uname -m)" in
     ;;
 esac
 
-ASSET="zftp-linux-$ARCH"
+ASSET="zftp-linux-$ARCH.bin"
 if [[ "$REQUESTED_VERSION" == "latest" ]]; then
   BASE_URL="https://github.com/$REPO/releases/latest/download"
 else

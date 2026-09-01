@@ -17,9 +17,9 @@ jobs:
       matrix:
         include:
           - rid: linux-x64
-            asset: zftp-linux-x64
+            asset: zftp-linux-x64.bin
           - rid: linux-arm64
-            asset: zftp-linux-arm64
+            asset: zftp-linux-arm64.bin
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6

@@ -98,9 +98,9 @@ jobs:
       matrix:
         include:
           - rid: linux-x64
-            asset: zftp-linux-x64
+            asset: zftp-linux-x64.bin
           - rid: linux-arm64
-            asset: zftp-linux-arm64
+            asset: zftp-linux-arm64.bin
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -162,9 +162,9 @@ jobs:
         shell: bash
         run: |
           cp scripts/install-linux.sh dist/release/install-linux.sh
-          chmod +x dist/release/install-linux.sh dist/release/zftp-linux-*
+          chmod +x dist/release/install-linux.sh dist/release/zftp-linux-*.bin
           cd dist/release
-          sha256sum ZFTP-Setup-*.exe zftp-linux-* ZFTP-macOS-*.zip install-linux.sh > SHA256SUMS
+          sha256sum ZFTP-Setup-*.exe zftp-linux-*.bin ZFTP-macOS-*.zip install-linux.sh > SHA256SUMS
           cat SHA256SUMS
 
       - name: Generate release notes
@@ -213,8 +213,8 @@ jobs:
 
           gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber \
             dist/release/ZFTP-Setup-*.exe \
-            dist/release/zftp-linux-x64 \
-            dist/release/zftp-linux-arm64 \
+            dist/release/zftp-linux-x64.bin \
+            dist/release/zftp-linux-arm64.bin \
             dist/release/ZFTP-macOS-*.zip \
             dist/release/install-linux.sh \
             dist/release/SHA256SUMS
@@ -228,7 +228,7 @@ jobs:
           assets="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
           for required in \
             "ZFTP-Setup-${{ needs.metadata.outputs.version }}.exe" \
-            zftp-linux-x64 zftp-linux-arm64 \
+            zftp-linux-x64.bin zftp-linux-arm64.bin \
             ZFTP-macOS-x64.zip ZFTP-macOS-arm64.zip \
             install-linux.sh SHA256SUMS; do
             if ! grep -Fxq "$required" <<< "$assets"; then
