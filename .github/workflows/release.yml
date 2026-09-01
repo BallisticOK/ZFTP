@@ -196,23 +196,27 @@ jobs:
           } > release-notes.md
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ needs.metadata.outputs.tag_name }}
-          target_commitish: ${{ github.sha }}
-          name: ZFTP ${{ needs.metadata.outputs.version }}
-          body_path: release-notes.md
-          make_latest: true
-          fail_on_unmatched_files: true
-          overwrite_files: true
-          files: |
-            dist/release/ZFTP-Setup-*.exe
-            dist/release/zftp-linux-x64
-            dist/release/zftp-linux-arm64
-            dist/release/ZFTP-macOS-*.zip
-            dist/release/install-linux.sh
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ needs.metadata.outputs.tag_name }}"
+          title="ZFTP ${{ needs.metadata.outputs.version }}"
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" \
+              --title "$title" --notes-file release-notes.md --latest
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "$title" --notes-file release-notes.md --latest
+          fi
+
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber \
+            dist/release/ZFTP-Setup-*.exe \
+            dist/release/zftp-linux-x64 \
+            dist/release/zftp-linux-arm64 \
+            dist/release/ZFTP-macOS-*.zip \
+            dist/release/install-linux.sh \
             dist/release/SHA256SUMS
 
       - name: Verify required release assets
